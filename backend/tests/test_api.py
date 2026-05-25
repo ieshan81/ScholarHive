@@ -61,3 +61,25 @@ def test_eligibility_evaluate():
         r = client.post(f"/api/scholarships/{sch[0]['id']}/evaluate")
         assert r.status_code == 200
         assert "eligibility_score" in r.json()
+
+
+def test_health_not_spa_html():
+    r = client.get("/health")
+    assert "application/json" in r.headers.get("content-type", "")
+
+
+def test_spa_fallback_deep_links():
+    from app.main import INDEX_HTML
+
+    if not INDEX_HTML.is_file():
+        return
+    for path in ("/", "/profile", "/settings", "/radar", "/queue"):
+        r = client.get(path)
+        assert r.status_code == 200, path
+        assert "text/html" in r.headers.get("content-type", "")
+
+
+def test_unknown_api_path_json_404():
+    r = client.get("/api/does-not-exist")
+    assert r.status_code == 404
+    assert r.json()["detail"] == "Not Found"
