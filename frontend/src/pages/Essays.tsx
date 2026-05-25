@@ -47,7 +47,7 @@ export default function Essays() {
   const review = async (id: number) => {
     const r = await api.essays.review(id);
     const e = await api.essays.list();
-    setEssays(e);
+    setEssays(e as Essay[]);
     setSelected((e as Essay[]).find((x) => x.id === id) || null);
     alert(`Personal Voice Review: ${r.message}\nScore: ${r.authenticity_score}`);
   };
@@ -57,7 +57,9 @@ export default function Essays() {
   return (
     <div>
       <h2 className="text-2xl font-display text-hive-gold mb-2">Essay Studio</h2>
-      <p className="text-sm text-hive-muted mb-4">Authenticity Review — not AI-detector evasion</p>
+      <p className="text-sm text-hive-muted mb-4">
+        Personal Voice Review — improves truthfulness and specificity, not AI-detector evasion
+      </p>
       {!geminiOk && (
         <ConfigBanner message="Gemini not configured — drafts require GEMINI_API_KEY" />
       )}
@@ -70,9 +72,7 @@ export default function Essays() {
           defaultValue=""
         >
           <option value="">Select scholarship...</option>
-          {scholarships
-            .filter((s) => s.name.includes("DEMO") || true)
-            .map((s) => (
+          {scholarships.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
@@ -81,7 +81,7 @@ export default function Essays() {
       </div>
 
       {essays.length === 0 ? (
-        <EmptyState title="No essays yet" hint="Generate a draft from a scholarship with an essay prompt" />
+        <EmptyState title="No essays drafted yet" hint="Evaluate a scholarship in Radar, then generate a draft here." />
       ) : (
         <div className="grid gap-4">
           {essays.map((e) => (
@@ -89,13 +89,31 @@ export default function Essays() {
               <div className="flex justify-between items-start">
                 <div>
                   <StatusBadge status={e.status} />
-                  {e.is_demo && <span className="badge bg-purple-500/20 text-purple-300 ml-2">demo</span>}
                   <p className="text-sm text-hive-muted mt-2">{e.word_count} words · Auth: {e.authenticity_score}%</p>
                 </div>
                 <div className="flex gap-2">
                   <button className="btn-secondary text-sm" onClick={() => review(e.id)}>
                     Personal Voice Review
                   </button>
+                  <select
+                    className="input-field text-xs py-1 max-w-[160px]"
+                    defaultValue=""
+                    onChange={(ev) => {
+                      if (ev.target.value) {
+                        api.essays.rewrite(e.id, ev.target.value).then(() => api.essays.list().then((x) => setEssays(x as Essay[])));
+                        ev.target.value = "";
+                      }
+                    }}
+                  >
+                    <option value="">Rewrite mode…</option>
+                    <option value="more_specific">More specific</option>
+                    <option value="more_natural">More natural</option>
+                    <option value="add_story_evidence">Add story evidence</option>
+                    <option value="reduce_generic">Reduce generic wording</option>
+                    <option value="tighten_word_count">Tighten word count</option>
+                    <option value="align_prompt">Align to prompt</option>
+                    <option value="keep_voice">Keep my voice</option>
+                  </select>
                   <button
                     className="btn-primary text-sm"
                     onClick={() => api.essays.approve(e.id).then(() => api.essays.list().then(setEssays))}

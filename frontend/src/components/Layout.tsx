@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import {
   LayoutDashboard,
   Radar,
+  Globe,
   Kanban,
   PenLine,
   User,
@@ -15,6 +16,7 @@ import {
 const nav = [
   { to: "/", label: "Mission Control", icon: LayoutDashboard },
   { to: "/radar", label: "Scholarship Radar", icon: Radar },
+  { to: "/web-search", label: "Web Search", icon: Globe },
   { to: "/queue", label: "Application Queue", icon: Kanban },
   { to: "/essays", label: "Essay Studio", icon: PenLine },
   { to: "/profile", label: "Profile Vault", icon: User },

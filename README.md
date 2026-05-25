@@ -20,9 +20,10 @@ Private scholarship operating system for one international Mechanical Engineerin
 | Frontend | React 18 + Vite + Tailwind (port 5173) |
 | Backend | FastAPI + SQLAlchemy (port 8000) |
 | Database | PostgreSQL (Railway) or SQLite (local) |
-| AI | Gemini API |
-| Email | Gmail OAuth (read-only) |
-| Messaging | Telegram Bot API |
+| AI | Gemini API (essays, structuring search results) |
+| Web search | Tavily API (scholarship discovery — manual UI trigger) |
+| Email | Gmail OAuth (read-only, optional) |
+| Messaging | Telegram Bot API (optional) |
 
 ## Local setup
 
@@ -73,31 +74,60 @@ $env:DATABASE_URL="sqlite:///./test_scholarhive.db"
 pytest tests/ -v
 ```
 
-## Environment variables
+## Environment variables (Railway)
 
-Copy `.env.example` to `.env` (root or backend). Never commit secrets.
+**Set on Railway today:**
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `DATABASE_URL` | Yes (SQLite default locally) | PostgreSQL on Railway |
-| `GEMINI_API_KEY` | For AI drafts | Essay generation |
-| `GOOGLE_CLIENT_ID` | For Gmail | OAuth |
-| `GOOGLE_CLIENT_SECRET` | For Gmail | OAuth |
-| `GOOGLE_REDIRECT_URI` | For Gmail | Must match Google Cloud console |
-| `GMAIL_SCOPES` | For Gmail | Default: `gmail.readonly` |
-| `TELEGRAM_BOT_TOKEN` | For Telegram | Bot messages |
-| `TELEGRAM_WEBHOOK_SECRET` | For Telegram | Webhook validation |
-| `APP_BASE_URL` | Production | Public app URL |
-| `FRONTEND_URL` | Production | For OAuth redirect after Gmail |
-| `BACKEND_URL` | Production | API base |
-| `SECRET_KEY` | Production | App secret |
-| `ENVIRONMENT` | Yes | `development` or `production` |
-| `CORS_ORIGINS` | Optional | Comma-separated frontend URLs |
-| `UPLOAD_STORAGE_PATH` | Optional | Document uploads (TODO) |
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+| `SECRET_KEY` | Long random secret |
+| `ENVIRONMENT` | `production` |
+| `GEMINI_API_KEY` | Essay drafts + structuring Tavily results |
+| `TAVILY_API_KEY` | Web scholarship search (manual from UI) |
+
+**Future optional:**
+
+| Variable | Purpose |
+|----------|---------|
+| `GOOGLE_CLIENT_ID` | Gmail OAuth |
+| `GOOGLE_CLIENT_SECRET` | Gmail OAuth |
+| `TELEGRAM_BOT_TOKEN` | Missing-info questions |
+| `TELEGRAM_WEBHOOK_SECRET` | Webhook validation |
+
+**Remove from Railway if present (now code defaults):**
+
+`APP_BASE_URL`, `BACKEND_URL`, `FRONTEND_URL`, `CORS_ORIGINS`, `RAILWAY_PUBLIC_DOMAIN`, `LOG_LEVEL`, `GMAIL_SCOPES`, `GOOGLE_REDIRECT_URI`, `SERPAPI_API_KEY`, `UPLOAD_STORAGE_DRIVER`, `UPLOAD_STORAGE_PATH`, `MAX_UPLOAD_MB`, `ENABLE_DEMO_DATA`
+
+**Code defaults (production):**
+
+- Public URL: `https://web-production-586ef.up.railway.app`
+- Gmail redirect: `https://web-production-586ef.up.railway.app/api/gmail/callback`
+- Gmail scope: `https://www.googleapis.com/auth/gmail.readonly`
+- Demo data: **disabled** in production
+- Upload path: `/data/uploads` (mount Railway volume at `/data` for persistence)
+- SerpAPI: **not used** — Tavily only
+
+Copy `.env.example` for local dev. Never commit secrets.
+
+## Web scholarship search (Tavily)
+
+- Manual only — use **Web Search** in the UI or `POST /api/web-search/run`
+- Does not run on startup
+- Requires `TAVILY_API_KEY` + recommended `GEMINI_API_KEY` for structured extraction
+- Deduplicates by URL/name, filters low-trust/spam, never overwrites user-edited scholarships
+- SerpAPI is not used
+
+## Personal Voice Review
+
+- Not a “humanizer” and not AI-detector evasion
+- Flags generic/robotic wording, vague claims, missing evidence
+- Rewrite modes use only Profile Vault + Story Bank facts (no fabrication)
 
 ## API overview
 
 - `GET /health` — service + integration status
+- `GET /api/web-search/status`, `POST /api/web-search/run`
 - Profile: `GET/PUT /api/profile`
 - Stories: `GET/POST/PUT/DELETE /api/stories`
 - Scholarships: `GET/POST`, evaluate, move-status, apply-prep
@@ -185,10 +215,15 @@ App **still runs** without optional keys — use manual triggers and edit profil
 - No unsupervised auto-submission
 - No fake facts in essays (Gemini instructed; you must verify)
 - No AI-detector evasion tooling
+- No production demo/mock data
 - Gmail tokens stored without encryption at rest (TODO)
-- Document file upload storage stubbed (metadata only)
+- Document vault metadata-only unless Railway volume mounted at `/data`
 - Background jobs: manual UI buttons only (no cron)
 - Single-user (no auth/multi-tenant)
+
+## Railway volume (uploads)
+
+For persistent document uploads later, create a Railway volume and mount it at `/data`. Without a volume, uploads may not survive redeploys.
 
 ## Next phase roadmap
 

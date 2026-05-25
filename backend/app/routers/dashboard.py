@@ -5,15 +5,19 @@ from app.database import get_db, check_database_connection
 from app.models.scholarship import Scholarship
 from app.models.essay import Essay
 from app.models.missing_info import MissingInfoRequest
+from app.utils import exclude_demo
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("/summary")
 def dashboard_summary(db: Session = Depends(get_db)):
-    scholarships = db.query(Scholarship).all()
-    essays = db.query(Essay).all()
-    missing = db.query(MissingInfoRequest).filter(MissingInfoRequest.status == "pending").all()
+    scholarships = exclude_demo(db.query(Scholarship), Scholarship).all()
+    essays = exclude_demo(db.query(Essay), Essay).all()
+    missing = exclude_demo(
+        db.query(MissingInfoRequest).filter(MissingInfoRequest.status == "pending"),
+        MissingInfoRequest,
+    ).all()
     week_ago = date.today() - timedelta(days=7)
 
     return {

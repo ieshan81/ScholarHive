@@ -25,7 +25,7 @@ def callback(code: str | None = Query(None), db: Session = Depends(get_db)):
         return {"success": False, "message": "Missing authorization code"}
     result = gmail_service.save_tokens_from_code(db, code)
     if result.get("success"):
-        return RedirectResponse(f"{settings.frontend_url}/gmail?connected=1")
+        return RedirectResponse(f"{settings.public_app_url.rstrip('/')}/gmail?connected=1")
     return result
 
 

@@ -56,7 +56,7 @@ export default function Stories() {
         </button>
       </div>
       {stories.length === 0 ? (
-        <EmptyState title="No stories yet" hint="Add verified personal stories for essay reuse" />
+        <EmptyState title="No stories saved yet" hint="Add real personal stories you can verify for essay reuse." />
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {stories.map((s) => (

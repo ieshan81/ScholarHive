@@ -14,7 +14,9 @@ def health_check():
         "service": "ScholarHive AI",
         "database": "connected" if db_ok else "not_connected",
         "gemini_configured": settings.gemini_configured,
+        "tavily_configured": settings.tavily_configured,
         "gmail_configured": settings.gmail_configured,
         "telegram_configured": settings.telegram_configured,
         "environment": settings.environment,
+        "demo_data_enabled": settings.enable_demo_data and not settings.is_production,
     }

@@ -13,6 +13,7 @@ from app.schemas.scholarship import (
 )
 from app.services.eligibility import evaluate_eligibility, apply_eligibility_to_scholarship
 from app.services.apply_prep import prepare_application
+from app.utils import exclude_demo
 
 router = APIRouter(prefix="/api/scholarships", tags=["scholarships"])
 
@@ -34,7 +35,7 @@ def list_scholarships(
     filter: str | None = Query(None, alias="filter"),
     db: Session = Depends(get_db),
 ):
-    q = db.query(Scholarship).order_by(Scholarship.priority_score.desc())
+    q = exclude_demo(db.query(Scholarship), Scholarship).order_by(Scholarship.priority_score.desc())
     items = q.all()
     if not filter:
         return items
@@ -84,6 +85,7 @@ def update_scholarship(scholarship_id: int, data: ScholarshipUpdate, db: Session
         raise HTTPException(404, "Scholarship not found")
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(sch, key, value)
+    sch.user_edited = True
     db.commit()
     db.refresh(sch)
     return sch

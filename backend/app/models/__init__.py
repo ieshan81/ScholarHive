@@ -5,6 +5,7 @@ from app.models.essay import Essay
 from app.models.missing_info import MissingInfoRequest
 from app.models.document import Document
 from app.models.gmail_token import GmailToken
+from app.models.web_search_run import WebSearchRun
 
 __all__ = [
     "Profile",
@@ -14,4 +15,5 @@ __all__ = [
     "MissingInfoRequest",
     "Document",
     "GmailToken",
+    "WebSearchRun",
 ]

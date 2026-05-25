@@ -51,11 +51,20 @@ class ScholarshipUpdate(BaseModel):
 class ScholarshipResponse(ScholarshipBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    provider: str | None = None
+    application_url: str | None = None
+    gpa_requirement: str | None = None
     eligibility_score: float = 0.0
     priority_score: float = 0.0
     eligibility_reasons: str | None = None
     eligibility_blockers: str | None = None
     missing_info: str | None = None
+    extraction_confidence: float | None = None
+    portal_login_required: str | None = None
+    manual_step_likely: bool = False
+    low_trust_reason: str | None = None
+    search_query_used: str | None = None
+    discovered_at: datetime | None = None
     is_demo: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -72,3 +81,6 @@ class EligibilityResult(BaseModel):
     reasons: list[str] = Field(default_factory=list)
     blockers: list[str] = Field(default_factory=list)
     missing_information: list[str] = Field(default_factory=list)
+    recommended_next_action: str | None = None
+    effort_score: float | None = None
+    priority_score: float | None = None

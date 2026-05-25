@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from app.config import get_settings
 from app.database import engine, Base, SessionLocal
 from app.seed import seed_database
+from app.db_migrate import run_migrations
 from app.routers import (
     health,
     profile,
@@ -19,6 +20,7 @@ from app.routers import (
     documents,
     dashboard,
     jobs,
+    web_search,
 )
 from app.routers import settings as settings_router
 
@@ -32,6 +34,7 @@ INDEX_HTML = FRONTEND_DIST / "index.html"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    run_migrations()
     db = SessionLocal()
     try:
         seed_database(db)
@@ -72,6 +75,7 @@ app.include_router(documents.router)
 app.include_router(dashboard.router)
 app.include_router(settings_router.router)
 app.include_router(jobs.router)
+app.include_router(web_search.router)
 
 
 def _register_frontend() -> None:

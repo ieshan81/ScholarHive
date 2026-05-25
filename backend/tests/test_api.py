@@ -4,8 +4,10 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./test_scholarhive.db")
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import Base, engine
+from app.db_migrate import run_migrations
 
 Base.metadata.create_all(bind=engine)
+run_migrations()
 client = TestClient(app)
 
 
@@ -83,3 +85,15 @@ def test_unknown_api_path_json_404():
     r = client.get("/api/does-not-exist")
     assert r.status_code == 404
     assert r.json()["detail"] == "Not Found"
+
+
+def test_web_search_not_configured():
+    r = client.get("/api/web-search/status")
+    assert r.status_code == 200
+    data = r.json()
+    assert "configured" in data
+
+
+def test_health_tavily_field():
+    r = client.get("/health")
+    assert "tavily_configured" in r.json()

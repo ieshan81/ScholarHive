@@ -10,6 +10,7 @@ import Gmail from "./pages/Gmail";
 import Telegram from "./pages/Telegram";
 import Documents from "./pages/Documents";
 import SettingsPage from "./pages/Settings";
+import WebSearch from "./pages/WebSearch";
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/radar" element={<Radar />} />
+        <Route path="/web-search" element={<WebSearch />} />
         <Route path="/queue" element={<Queue />} />
         <Route path="/essays" element={<Essays />} />
         <Route path="/profile" element={<Profile />} />

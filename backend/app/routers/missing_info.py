@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.missing_info import MissingInfoRequest
+from app.utils import exclude_demo
 
 router = APIRouter(prefix="/api/missing-info", tags=["missing-info"])
 
@@ -14,7 +15,9 @@ class AnswerBody(BaseModel):
 
 @router.get("")
 def list_missing_info(db: Session = Depends(get_db)):
-    return db.query(MissingInfoRequest).order_by(MissingInfoRequest.created_at.desc()).all()
+    return exclude_demo(db.query(MissingInfoRequest), MissingInfoRequest).order_by(
+        MissingInfoRequest.created_at.desc()
+    ).all()
 
 
 @router.post("/{request_id}/answer")

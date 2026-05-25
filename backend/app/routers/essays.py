@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.essay import Essay
@@ -13,7 +14,8 @@ from app.schemas.essay import (
     EssayReviewResponse,
 )
 from app.services.gemini import generate_essay_draft
-from app.services.authenticity import review_essay
+from app.services.authenticity import review_essay, rewrite_essay_section
+from app.utils import exclude_demo
 
 router = APIRouter(prefix="/api/essays", tags=["essays"])
 
@@ -29,13 +31,16 @@ def _profile_text(profile: Profile | None) -> str:
 
 
 def _stories_text(db: Session) -> str:
-    stories = db.query(Story).filter(Story.verified_by_user == True).all()  # noqa: E712
+    stories = exclude_demo(
+        db.query(Story).filter(Story.verified_by_user.is_(True)),
+        Story,
+    ).all()
     return "\n\n".join(f"{s.title}: {s.summary or s.full_story}" for s in stories)
 
 
 @router.get("", response_model=list[EssayResponse])
 def list_essays(db: Session = Depends(get_db)):
-    return db.query(Essay).order_by(Essay.updated_at.desc()).all()
+    return exclude_demo(db.query(Essay), Essay).order_by(Essay.updated_at.desc()).all()
 
 
 @router.post("/generate", response_model=EssayResponse)
@@ -67,7 +72,7 @@ async def generate_essay(data: EssayGenerateRequest, db: Session = Depends(get_d
             scholarship_id=sch.id,
             essay_id=None,
             question=f"Please provide: {topic}",
-            reason="Gemini flagged missing information — do not fabricate",
+            reason="Missing information flagged — do not fabricate in essay",
             status="pending",
         ))
     db.commit()
@@ -84,8 +89,9 @@ def review_essay_endpoint(essay_id: int, db: Session = Depends(get_db)):
     essay = db.query(Essay).filter(Essay.id == essay_id).first()
     if not essay:
         raise HTTPException(404, "Essay not found")
+    profile = db.query(Profile).filter(Profile.id == 1).first()
     text = essay.final_text or essay.draft_text
-    result = review_essay(text, essay.prompt)
+    result = review_essay(text, essay.prompt, _profile_text(profile), _stories_text(db))
     essay.authenticity_score = result["authenticity_score"]
     essay.prompt_alignment_score = result["prompt_alignment_score"]
     essay.generic_language_flags = result["generic_language_flags"]
@@ -94,7 +100,47 @@ def review_essay_endpoint(essay_id: int, db: Session = Depends(get_db)):
     essay.review_suggestions = result["review_suggestions"]
     essay.status = "needs_review"
     db.commit()
-    return EssayReviewResponse(**result)
+    for item in result.get("missing_evidence") or []:
+        db.add(MissingInfoRequest(
+            scholarship_id=essay.scholarship_id,
+            essay_id=essay.id,
+            question=f"Essay review: {item}",
+            reason="Personal Voice Review — provide real evidence",
+            status="pending",
+        ))
+    db.commit()
+    return EssayReviewResponse(**{k: v for k, v in result.items() if k != "rewrite_modes_available"})
+
+
+class RewriteRequest(BaseModel):
+    mode: str
+
+
+@router.post("/{essay_id}/rewrite")
+async def rewrite_endpoint(essay_id: int, body: RewriteRequest, db: Session = Depends(get_db)):
+    essay = db.query(Essay).filter(Essay.id == essay_id).first()
+    if not essay:
+        raise HTTPException(404, "Essay not found")
+    profile = db.query(Profile).filter(Profile.id == 1).first()
+    text = essay.final_text or essay.draft_text or ""
+    result = await rewrite_essay_section(
+        text, body.mode, essay.prompt, _profile_text(profile), _stories_text(db)
+    )
+    if result.get("revised_text"):
+        essay.draft_text = result["revised_text"]
+        essay.word_count = len(result["revised_text"].split())
+        essay.status = "needs_review"
+        db.commit()
+    for item in result.get("missing_info") or []:
+        db.add(MissingInfoRequest(
+            scholarship_id=essay.scholarship_id,
+            essay_id=essay.id,
+            question=str(item),
+            reason="Rewrite flagged missing evidence",
+            status="pending",
+        ))
+        db.commit()
+    return result
 
 
 @router.put("/{essay_id}", response_model=EssayResponse)

@@ -47,6 +47,19 @@ export const api = {
     update: (id: number, data: object) =>
       request(`/api/essays/${id}`, { method: "PUT", body: JSON.stringify(data) }),
     approve: (id: number) => request(`/api/essays/${id}/approve`, { method: "POST" }),
+    rewrite: (id: number, mode: string) =>
+      request<Record<string, unknown>>(`/api/essays/${id}/rewrite`, {
+        method: "POST",
+        body: JSON.stringify({ mode }),
+      }),
+  },
+  webSearch: {
+    status: () => request<Record<string, unknown>>("/api/web-search/status"),
+    run: (query?: string) =>
+      request<Record<string, unknown>>("/api/web-search/run", {
+        method: "POST",
+        body: JSON.stringify(query ? { query } : {}),
+      }),
   },
   gmail: {
     status: () => request<Record<string, unknown>>("/api/gmail/status"),

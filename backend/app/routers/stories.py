@@ -3,13 +3,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.story import Story
 from app.schemas.story import StoryCreate, StoryUpdate, StoryResponse
+from app.utils import exclude_demo
 
 router = APIRouter(prefix="/api/stories", tags=["stories"])
 
 
 @router.get("", response_model=list[StoryResponse])
 def list_stories(db: Session = Depends(get_db)):
-    return db.query(Story).order_by(Story.updated_at.desc()).all()
+    return exclude_demo(db.query(Story), Story).order_by(Story.updated_at.desc()).all()
 
 
 @router.post("", response_model=StoryResponse)

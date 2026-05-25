@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.document import Document
+from app.utils import exclude_demo
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -25,7 +26,7 @@ class DocumentUpdate(BaseModel):
 
 @router.get("")
 def list_documents(db: Session = Depends(get_db)):
-    return db.query(Document).order_by(Document.updated_at.desc()).all()
+    return exclude_demo(db.query(Document), Document).order_by(Document.updated_at.desc()).all()
 
 
 @router.post("")

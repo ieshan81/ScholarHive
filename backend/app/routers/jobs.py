@@ -13,7 +13,8 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 @router.post("/recalculate-eligibility")
 def recalculate_eligibility(db: Session = Depends(get_db)):
     profile = db.query(Profile).filter(Profile.id == 1).first()
-    scholarships = db.query(Scholarship).all()
+    from app.utils import exclude_demo
+    scholarships = exclude_demo(db.query(Scholarship), Scholarship).all()
     count = 0
     for sch in scholarships:
         result = evaluate_eligibility(profile, sch)

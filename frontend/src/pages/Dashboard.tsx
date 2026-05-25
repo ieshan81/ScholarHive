@@ -46,6 +46,9 @@ export default function Dashboard() {
       {health && !health.gemini_configured && (
         <ConfigBanner message="Gemini not configured — essay AI drafts disabled until GEMINI_API_KEY is set." />
       )}
+      {health && !health.tavily_configured && (
+        <ConfigBanner message="Tavily not configured — web scholarship search disabled until TAVILY_API_KEY is set." />
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {metrics.map((m) => (
@@ -60,7 +63,7 @@ export default function Dashboard() {
         <div className="card">
           <h3 className="font-semibold mb-3">Upcoming deadlines</h3>
           {deadlines.length === 0 ? (
-            <p className="text-hive-muted text-sm">No upcoming deadlines in database</p>
+            <p className="text-hive-muted text-sm">No upcoming deadlines — run Web Search or add scholarships.</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {deadlines.map((d, i) => (
@@ -77,6 +80,9 @@ export default function Dashboard() {
           <div className="flex flex-wrap gap-2">
             <button className="btn-secondary text-sm" onClick={() => api.jobs.recalculate()}>
               Recalculate eligibility
+            </button>
+            <button className="btn-secondary text-sm" onClick={() => api.webSearch.run()}>
+              Run Web Search
             </button>
             <button className="btn-secondary text-sm" onClick={() => api.jobs.scanGmail()}>
               Scan Gmail now
