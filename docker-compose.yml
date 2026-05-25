@@ -1,0 +1,15 @@
+# Optional local PostgreSQL (use DATABASE_URL=postgresql://scholarhive:local@localhost:5432/scholarhive)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scholarhive
+      POSTGRES_PASSWORD: local
+      POSTGRES_DB: scholarhive
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

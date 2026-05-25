@@ -1,0 +1,38 @@
+from datetime import datetime, date
+from sqlalchemy import String, Text, Boolean, Integer, Float, DateTime, Date
+from sqlalchemy.orm import Mapped, mapped_column
+from app.database import Base
+
+
+class Scholarship(Base):
+    __tablename__ = "scholarships"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(500))
+    source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(50), default="manual")
+    award_amount: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
+    eligibility_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    required_documents: Mapped[str | None] = mapped_column(Text, nullable=True)
+    essay_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    essay_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    word_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    citizenship_requirement: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    major_requirement: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    education_level_requirement: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    international_allowed: Mapped[str] = mapped_column(String(20), default="unknown")
+    trust_score: Mapped[float] = mapped_column(Float, default=50.0)
+    eligibility_score: Mapped[float] = mapped_column(Float, default=0.0)
+    effort_score: Mapped[float] = mapped_column(Float, default=50.0)
+    priority_score: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[str] = mapped_column(String(50), default="found")
+    next_action: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    eligibility_reasons: Mapped[str | None] = mapped_column(Text, nullable=True)
+    eligibility_blockers: Mapped[str | None] = mapped_column(Text, nullable=True)
+    missing_info: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

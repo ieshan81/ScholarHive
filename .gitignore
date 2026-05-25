@@ -1,0 +1,15 @@
+.env
+.env.local
+*.db
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+node_modules/
+frontend/dist/
+uploads/
+test_scholarhive.db
+scholarhive.db
+.DS_Store
+*.log
