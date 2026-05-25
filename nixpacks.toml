@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python311", "nodejs_20"]
+nixPkgs = ["python311Full", "nodejs_20"]
 
 [phases.install]
 cmds = [
@@ -9,3 +9,4 @@ cmds = [
 
 [start]
 cmd = "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+
