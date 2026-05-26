@@ -6,7 +6,7 @@ import os
 def configure_shared_libraries() -> None:
     if os.environ.get("LD_LIBRARY_PATH_CONFIGURED"):
         return
-    candidates: list[str] = ["/opt/scholarhive-libs"]
+    candidates: list[str] = ["/opt/scholarhive-libs", "/root/.nix-profile/lib", "/root/.nix-profile/lib64"]
     for pattern in (
         "/nix/store/*-gcc-*-lib/lib",
         "/nix/store/*gcc*/lib",
