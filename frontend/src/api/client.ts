@@ -118,7 +118,22 @@ export const api = {
     list: (showTracking = false) =>
       request<unknown[]>(`/api/portals${showTracking ? "?show_tracking=true" : ""}`),
     agentStatus: () => request<Record<string, unknown>>("/api/portals/agent-status"),
-    openSession: (id: number) => request(`/api/portals/${id}/open-session`, { method: "POST" }),
+    startBrowser: (id: number) =>
+      request<Record<string, unknown>>(`/api/portals/${id}/start-browser-session`, { method: "POST" }),
+    openSession: (id: number) => request<Record<string, unknown>>(`/api/portals/${id}/open-session`, { method: "POST" }),
+    scanPublic: (id: number) =>
+      request<Record<string, unknown>>(`/api/portals/${id}/scan-public`, { method: "POST" }),
+    scanWithSession: (id: number) =>
+      request<Record<string, unknown>>(`/api/portals/${id}/scan-with-session`, { method: "POST" }),
+    continueCheckpoint: (runId: number) =>
+      request<Record<string, unknown>>(`/api/portals/runs/${runId}/continue-after-checkpoint`, { method: "POST" }),
+    saveRunSession: (runId: number) =>
+      request<Record<string, unknown>>(`/api/portals/runs/${runId}/save-session`, { method: "POST" }),
+    getRun: (runId: number) => request<Record<string, unknown>>(`/api/portals/runs/${runId}`),
+    screenshotUrl: (runId: number) => `${import.meta.env.VITE_API_URL || ""}/api/portals/runs/${runId}/screenshot`,
+    opportunities: (portalId: number) => request<unknown[]>(`/api/portals/${portalId}/opportunities`),
+    cleanupSession: (portalId: number) =>
+      request<Record<string, unknown>>(`/api/portals/${portalId}/cleanup-session`, { method: "POST" }),
   },
   profileGraph: {
     list: () => request<Record<string, unknown>>("/api/profile-graph"),

@@ -55,7 +55,9 @@ class PortalSession(Base):
     portal_account_id: Mapped[int] = mapped_column(ForeignKey("portal_accounts.id"))
     session_status: Mapped[str] = mapped_column(String(50), default="needs_login")
     session_storage_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    storage_state_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     cookie_storage_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    last_validated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_guess_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     checkpoint_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -92,6 +94,8 @@ class PortalRun(Base):
     forms_prepared: Mapped[int] = mapped_column(Integer, default=0)
     errors: Mapped[str | None] = mapped_column(Text, nullable=True)
     audit_log_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    latest_screenshot_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    browser_mode: Mapped[str | None] = mapped_column(String(50), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

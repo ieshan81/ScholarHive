@@ -151,3 +151,30 @@ def test_memory_vault_overview():
     r = client.get("/api/memory-vault/overview")
     assert r.status_code == 200
     assert "clusters" in r.json()
+
+
+def test_portal_agent_status():
+    r = client.get("/api/portals/agent-status")
+    assert r.status_code == 200
+    data = r.json()
+    assert "playwright_available" in data
+    assert "chromium_available" in data
+    assert "browser_agent" in data
+    assert data["final_submit"] == "always_manual"
+
+
+def test_portal_public_scan_no_crash():
+    from app.models.portal import Portal
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        portal = Portal(domain="example.com", portal_url="https://example.com", portal_name="Example")
+        db.add(portal)
+        db.commit()
+        db.refresh(portal)
+        r = client.post(f"/api/portals/{portal.id}/scan-public")
+        assert r.status_code == 200
+        assert "success" in r.json() or "message" in r.json()
+    finally:
+        db.close()

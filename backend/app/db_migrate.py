@@ -55,6 +55,16 @@ GMAIL_MESSAGE_COLUMNS = {
     "scan_error": "TEXT",
 }
 
+PORTAL_RUN_COLUMNS = {
+    "latest_screenshot_path": "VARCHAR(1000)",
+    "browser_mode": "VARCHAR(50)",
+}
+
+PORTAL_SESSION_COLUMNS = {
+    "storage_state_path": "VARCHAR(1000)",
+    "last_validated_at": "TIMESTAMP",
+}
+
 
 def _add_columns(table: str, columns: dict) -> None:
     insp = inspect(engine)
@@ -82,3 +92,5 @@ def run_migrations() -> None:
     _add_columns("documents", DOCUMENT_COLUMNS)
     _add_columns("profile_graph_nodes", PROFILE_GRAPH_COLUMNS)
     _add_columns("gmail_messages", GMAIL_MESSAGE_COLUMNS)
+    _add_columns("portal_runs", PORTAL_RUN_COLUMNS)
+    _add_columns("portal_sessions", PORTAL_SESSION_COLUMNS)
