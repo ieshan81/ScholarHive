@@ -174,7 +174,6 @@ def _browser_mode() -> str:
 def _launch_browser(headed: bool = False):
     from playwright.sync_api import sync_playwright
 
-    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/playwright-browsers")
     pw = sync_playwright().start()
     browser = pw.chromium.launch(
         headless=not headed,
