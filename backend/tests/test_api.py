@@ -169,12 +169,64 @@ def test_portal_public_scan_no_crash():
 
     db = SessionLocal()
     try:
-        portal = Portal(domain="example.com", portal_url="https://example.com", portal_name="Example")
-        db.add(portal)
-        db.commit()
-        db.refresh(portal)
+        portal = db.query(Portal).filter(Portal.domain == "example.com").first()
+        if not portal:
+            portal = Portal(domain="example.com", portal_url="https://example.com", portal_name="Example")
+            db.add(portal)
+            db.commit()
+            db.refresh(portal)
         r = client.post(f"/api/portals/{portal.id}/scan-public")
         assert r.status_code == 200
-        assert "success" in r.json() or "message" in r.json()
+        data = r.json()
+        assert "success" in data or "message" in data
+        body = r.text
+        assert "Sync API inside the asyncio loop" not in body
+        if data.get("success") is False:
+            assert data.get("error") or data.get("message")
+            assert data.get("screenshot_url") is None
     finally:
         db.close()
+
+
+def test_portal_screenshot_missing_404():
+    r = client.get("/api/portals/runs/999999/screenshot")
+    assert r.status_code == 404
+    assert "not available" in r.json()["detail"].lower()
+
+
+def test_portal_public_scan_failed_returns_clean_error():
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.portal_browser import CheckpointResult, PageScanResult
+
+    with patch("app.services.portal_agent.browser.scan_page", new_callable=AsyncMock) as mock_scan:
+        mock_scan.return_value = PageScanResult(
+            url="https://example.com",
+            title="",
+            checkpoint=CheckpointResult(False),
+            error="Test scan failure",
+        )
+        from app.models.portal import Portal
+        from app.database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            portal = db.query(Portal).filter(Portal.domain == "example-scan-fail.test").first()
+            if not portal:
+                portal = Portal(
+                    domain="example-scan-fail.test",
+                    portal_url="https://example.com",
+                    portal_name="Fail Test",
+                )
+                db.add(portal)
+                db.commit()
+                db.refresh(portal)
+            r = client.post(f"/api/portals/{portal.id}/scan-public")
+            assert r.status_code == 200
+            data = r.json()
+            assert data["success"] is False
+            assert data["status"] == "failed"
+            assert data["error"] == "Test scan failure"
+            assert data.get("screenshot_url") is None
+        finally:
+            db.close()

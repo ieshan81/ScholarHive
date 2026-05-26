@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.portal import Portal
+from app.models.portal import Portal, PortalRun
 from app.services.portal_cleanup import cleanup_portal_domains
 from app.services.portal_agent import (
     cleanup_session,
@@ -27,9 +27,9 @@ router = APIRouter(prefix="/api/portals", tags=["portals"])
 
 
 @router.get("")
-def list_portals(show_tracking: bool = Query(False), db: Session = Depends(get_db)):
+async def list_portals(show_tracking: bool = Query(False), db: Session = Depends(get_db)):
     cleanup_portal_domains(db)
-    agent = portal_agent_status()
+    agent = await portal_agent_status()
     q = db.query(Portal).order_by(Portal.source_count.desc())
     if not show_tracking:
         q = q.filter(Portal.domain_status == "active")
@@ -60,38 +60,38 @@ def cleanup(db: Session = Depends(get_db)):
 
 
 @router.get("/agent-status")
-def agent_status():
-    return portal_agent_status()
+async def agent_status():
+    return await portal_agent_status()
 
 
 @router.post("/{portal_id}/start-browser-session")
-def start_browser(portal_id: int, db: Session = Depends(get_db)):
-    return start_browser_session(db, portal_id)
+async def start_browser(portal_id: int, db: Session = Depends(get_db)):
+    return await start_browser_session(db, portal_id)
 
 
 @router.post("/{portal_id}/open-session")
-def open_session(portal_id: int, db: Session = Depends(get_db)):
-    return open_portal_session(db, portal_id)
+async def open_session(portal_id: int, db: Session = Depends(get_db)):
+    return await open_portal_session(db, portal_id)
 
 
 @router.post("/{portal_id}/scan-public")
-def scan_public(portal_id: int, db: Session = Depends(get_db)):
-    return scan_public_portal(db, portal_id)
+async def scan_public(portal_id: int, db: Session = Depends(get_db)):
+    return await scan_public_portal(db, portal_id)
 
 
 @router.post("/{portal_id}/scan-with-session")
-def scan_session(portal_id: int, db: Session = Depends(get_db)):
-    return scan_with_session(db, portal_id)
+async def scan_session(portal_id: int, db: Session = Depends(get_db)):
+    return await scan_with_session(db, portal_id)
 
 
 @router.post("/runs/{run_id}/continue-after-checkpoint")
-def continue_checkpoint(run_id: int, db: Session = Depends(get_db)):
-    return continue_after_checkpoint(db, run_id)
+async def continue_checkpoint(run_id: int, db: Session = Depends(get_db)):
+    return await continue_after_checkpoint(db, run_id)
 
 
 @router.post("/runs/{run_id}/save-session")
-def save_run_session(run_id: int, db: Session = Depends(get_db)):
-    return save_session_for_run(db, run_id)
+async def save_run_session(run_id: int, db: Session = Depends(get_db)):
+    return await save_session_for_run(db, run_id)
 
 
 @router.get("/runs/{run_id}")
@@ -104,18 +104,17 @@ def get_run_state(run_id: int, db: Session = Depends(get_db)):
 
 @router.get("/runs/{run_id}/screenshot")
 def get_screenshot(run_id: int, db: Session = Depends(get_db)):
-    from app.models.portal import PortalRun
-
     run = db.query(PortalRun).filter(PortalRun.id == run_id).first()
     path_str = None
     if run and run.latest_screenshot_path:
-        path_str = run.latest_screenshot_path
-    if not path_str:
+        candidate = Path(run.latest_screenshot_path)
+        if candidate.is_file():
+            path_str = str(candidate)
+    if not path_str and browser.screenshot_exists(run_id):
         path_str = str(browser.screenshot_path(run_id))
-    path = Path(path_str)
-    if not path.is_file():
-        raise HTTPException(404, "Screenshot not available yet")
-    return FileResponse(path, media_type="image/png")
+    if not path_str:
+        raise HTTPException(404, "Screenshot not available")
+    return FileResponse(path_str, media_type="image/png")
 
 
 @router.get("/{portal_id}/opportunities")
@@ -134,5 +133,5 @@ class SaveSessionBody(BaseModel):
 
 
 @router.post("/save-session")
-def save_session(body: SaveSessionBody, db: Session = Depends(get_db)):
-    return save_session_stub(db, body.portal_account_id, body.note)
+async def save_session(body: SaveSessionBody, db: Session = Depends(get_db)):
+    return await save_session_stub(db, body.portal_account_id, body.note)

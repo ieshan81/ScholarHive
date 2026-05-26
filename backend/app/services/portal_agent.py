@@ -6,9 +6,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.models.portal import (
-    ApplicationFormDraft,
     Portal,
     PortalAccount,
     PortalCheckpoint,
@@ -20,9 +18,8 @@ from app.services import portal_browser as browser
 from app.services.portal_domain import quick_canonical_domain
 
 
-def portal_agent_status() -> dict:
-    settings = get_settings()
-    check = browser.check_playwright_available()
+async def portal_agent_status() -> dict:
+    check = await browser.check_playwright_available()
     dirs = browser.ensure_browser_dirs()
     mode = browser._browser_mode()
 
@@ -156,7 +153,6 @@ def _save_opportunities(
         title = (link.text or "Scholarship opportunity")[:500]
         if len(title) < 5:
             continue
-        domain = quick_canonical_domain(link.href)
         existing = (
             db.query(PortalOpportunity)
             .filter(PortalOpportunity.portal_account_id == account.id, PortalOpportunity.title == title)
@@ -191,6 +187,9 @@ def _run_to_dict(run: PortalRun, checkpoint: PortalCheckpoint | None = None) -> 
             audit = json.loads(run.audit_log_summary)
         except Exception:
             audit = {"summary": run.audit_log_summary}
+    screenshot_url = None
+    if run.latest_screenshot_path and browser.screenshot_exists(run.id):
+        screenshot_url = f"/api/portals/runs/{run.id}/screenshot"
     return {
         "id": run.id,
         "portal_account_id": run.portal_account_id,
@@ -201,6 +200,7 @@ def _run_to_dict(run: PortalRun, checkpoint: PortalCheckpoint | None = None) -> 
         "forms_found": run.forms_found,
         "errors": run.errors,
         "latest_screenshot_path": getattr(run, "latest_screenshot_path", None),
+        "screenshot_url": screenshot_url,
         "browser_mode": getattr(run, "browser_mode", None),
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,
@@ -216,7 +216,13 @@ def _run_to_dict(run: PortalRun, checkpoint: PortalCheckpoint | None = None) -> 
     }
 
 
-def start_browser_session(db: Session, portal_id: int) -> dict:
+def _screenshot_url_for_run(run: PortalRun) -> str | None:
+    if run.latest_screenshot_path and browser.screenshot_exists(run.id):
+        return f"/api/portals/runs/{run.id}/screenshot"
+    return None
+
+
+async def start_browser_session(db: Session, portal_id: int) -> dict:
     portal = db.query(Portal).filter(Portal.id == portal_id).first()
     if not portal:
         return {"success": False, "message": "Portal not found"}
@@ -233,32 +239,35 @@ def start_browser_session(db: Session, portal_id: int) -> dict:
     db.add(run)
     db.flush()
 
-    scan = browser.scan_page(url, run_id=run.id, storage_state=_session_file(account.id))
+    scan = await browser.scan_page(url, run_id=run.id, storage_state=_session_file(account.id))
     run.current_url = scan.url or url
-    if getattr(run, "latest_screenshot_path", None) is not None or scan.screenshot_path:
+    if scan.screenshot_path:
         run.latest_screenshot_path = scan.screenshot_path
 
     if scan.error:
         run.status = "failed"
         run.errors = scan.error
         run.finished_at = datetime.utcnow()
-        browser.close_run_browser(run.id)
+        await browser.close_run_browser(run.id)
         db.commit()
         return {
             "success": False,
             "portal_id": portal_id,
             "portal_account_id": account.id,
             "portal_run_id": run.id,
+            "run_id": run.id,
             "status": "failed",
+            "error": scan.error,
             "message": scan.error,
-            "agent_status": portal_agent_status(),
+            "screenshot_url": None,
+            "agent_status": await portal_agent_status(),
         }
 
     checkpoint = None
     if scan.checkpoint.detected:
         ctype = scan.checkpoint.checkpoint_type or "login_required"
         if ctype in ("captcha", "two_factor", "final_submit", "payment"):
-            browser.close_run_browser(run.id)
+            await browser.close_run_browser(run.id)
         instruction = (
             f"Complete {ctype.replace('_', ' ')} manually at: {scan.url}. "
             "Do not bypass CAPTCHA/2FA. When done, click Continue after checkpoint."
@@ -276,16 +285,17 @@ def start_browser_session(db: Session, portal_id: int) -> dict:
         "portal_id": portal_id,
         "portal_account_id": account.id,
         "portal_run_id": run.id,
+        "run_id": run.id,
         "checkpoint_id": checkpoint.id if checkpoint else None,
         "current_url": run.current_url,
-        "screenshot_url": f"/api/portals/runs/{run.id}/screenshot",
+        "screenshot_url": _screenshot_url_for_run(run),
         "status": run.status,
         "message": checkpoint.instruction_to_user if checkpoint else "Browser session started",
-        "agent_status": portal_agent_status(),
+        "agent_status": await portal_agent_status(),
     }
 
 
-def scan_public_portal(db: Session, portal_id: int) -> dict:
+async def scan_public_portal(db: Session, portal_id: int) -> dict:
     portal = db.query(Portal).filter(Portal.id == portal_id).first()
     if not portal:
         return {"success": False, "message": "Portal not found"}
@@ -302,15 +312,22 @@ def scan_public_portal(db: Session, portal_id: int) -> dict:
     db.add(run)
     db.flush()
 
-    scan = browser.scan_page(url, run_id=run.id)
-    browser.close_run_browser(run.id)
+    scan = await browser.scan_page(url, run_id=run.id)
+    await browser.close_run_browser(run.id)
 
     if scan.error:
         run.status = "failed"
         run.errors = scan.error
         run.finished_at = datetime.utcnow()
         db.commit()
-        return {"success": False, "message": scan.error, "run_id": run.id}
+        return {
+            "success": False,
+            "run_id": run.id,
+            "status": "failed",
+            "error": scan.error,
+            "message": scan.error,
+            "screenshot_url": None,
+        }
 
     checkpoint = None
     if scan.checkpoint.detected and scan.checkpoint.checkpoint_type in (
@@ -346,19 +363,19 @@ def scan_public_portal(db: Session, portal_id: int) -> dict:
 
     db.commit()
     return {
-        "success": True,
+        "success": run.status != "failed",
         "run_id": run.id,
         "status": run.status,
         "opportunities_found": run.opportunities_found,
         "links_extracted": len(scan.links),
         "login_required": scan.login_required,
         "checkpoint_id": checkpoint.id if checkpoint else None,
-        "screenshot_url": f"/api/portals/runs/{run.id}/screenshot",
+        "screenshot_url": _screenshot_url_for_run(run),
         "message": "Public scan complete" if run.status == "completed" else "Checkpoint required",
     }
 
 
-def scan_with_session(db: Session, portal_id: int) -> dict:
+async def scan_with_session(db: Session, portal_id: int) -> dict:
     portal = db.query(Portal).filter(Portal.id == portal_id).first()
     if not portal:
         return {"success": False, "message": "Portal not found"}
@@ -396,14 +413,21 @@ def scan_with_session(db: Session, portal_id: int) -> dict:
     db.add(run)
     db.flush()
 
-    scan = browser.scan_page(url, run_id=run.id, storage_state=storage)
-    browser.close_run_browser(run.id)
+    scan = await browser.scan_page(url, run_id=run.id, storage_state=storage)
+    await browser.close_run_browser(run.id)
 
     if scan.error:
         run.status = "failed"
         run.errors = scan.error
         db.commit()
-        return {"success": False, "message": scan.error}
+        return {
+            "success": False,
+            "run_id": run.id,
+            "status": "failed",
+            "error": scan.error,
+            "message": scan.error,
+            "screenshot_url": None,
+        }
 
     if scan.checkpoint.detected:
         cp = _create_checkpoint(
@@ -422,6 +446,7 @@ def scan_with_session(db: Session, portal_id: int) -> dict:
     run.opportunities_found = saved
     run.status = "completed"
     run.finished_at = datetime.utcnow()
+    run.latest_screenshot_path = scan.screenshot_path
     portal.last_scanned_at = datetime.utcnow()
     account.auth_status = "connected"
     sess = _latest_session(db, account.id)
@@ -433,11 +458,12 @@ def scan_with_session(db: Session, portal_id: int) -> dict:
         "success": True,
         "run_id": run.id,
         "opportunities_found": saved,
+        "screenshot_url": _screenshot_url_for_run(run),
         "message": f"Session scan complete — {saved} opportunities",
     }
 
 
-def continue_after_checkpoint(db: Session, run_id: int) -> dict:
+async def continue_after_checkpoint(db: Session, run_id: int) -> dict:
     run = db.query(PortalRun).filter(PortalRun.id == run_id).first()
     if not run:
         return {"success": False, "message": "Run not found"}
@@ -456,8 +482,20 @@ def continue_after_checkpoint(db: Session, run_id: int) -> dict:
 
     url = run.current_url or portal.portal_url or f"https://{portal.domain}"
     storage = _session_file(account.id)
-    scan = browser.scan_page(url, run_id=run.id, storage_state=storage)
-    browser.close_run_browser(run.id)
+    scan = await browser.scan_page(url, run_id=run.id, storage_state=storage)
+    await browser.close_run_browser(run.id)
+
+    if scan.error:
+        run.status = "failed"
+        run.errors = scan.error
+        db.commit()
+        return {
+            "success": False,
+            "run_id": run.id,
+            "status": "failed",
+            "error": scan.error,
+            "message": scan.error,
+        }
 
     if scan.checkpoint.detected and scan.checkpoint.checkpoint_type in (
         "captcha",
@@ -479,13 +517,19 @@ def continue_after_checkpoint(db: Session, run_id: int) -> dict:
     run.opportunities_found = (run.opportunities_found or 0) + saved
     run.status = "completed"
     run.finished_at = datetime.utcnow()
+    run.latest_screenshot_path = scan.screenshot_path
     if portal:
         portal.checkpoints_pending = max(0, (portal.checkpoints_pending or 1) - 1)
     db.commit()
-    return {"success": True, "message": f"Continued — {saved} new opportunities", "run_id": run_id}
+    return {
+        "success": True,
+        "message": f"Continued — {saved} new opportunities",
+        "run_id": run_id,
+        "screenshot_url": _screenshot_url_for_run(run),
+    }
 
 
-def save_session_for_run(db: Session, run_id: int) -> dict:
+async def save_session_for_run(db: Session, run_id: int) -> dict:
     run = db.query(PortalRun).filter(PortalRun.id == run_id).first()
     if not run:
         return {"success": False, "message": "Run not found"}
@@ -493,7 +537,7 @@ def save_session_for_run(db: Session, run_id: int) -> dict:
     if not account:
         return {"success": False, "message": "Account not found"}
 
-    result = browser.save_storage_state(run_id, account.id)
+    result = await browser.save_storage_state(run_id, account.id)
     if not result.get("success"):
         return result
 
@@ -569,12 +613,11 @@ def list_opportunities(db: Session, portal_id: int) -> list[dict]:
     ]
 
 
-# Backward compatibility
-def open_portal_session(db: Session, portal_id: int) -> dict:
-    return start_browser_session(db, portal_id)
+async def open_portal_session(db: Session, portal_id: int) -> dict:
+    return await start_browser_session(db, portal_id)
 
 
-def save_session_stub(db: Session, portal_account_id: int, storage_note: str = "manual_session") -> dict:
+async def save_session_stub(db: Session, portal_account_id: int, storage_note: str = "manual_session") -> dict:
     account = db.query(PortalAccount).filter(PortalAccount.id == portal_account_id).first()
     if not account:
         return {"success": False, "message": "Account not found"}
@@ -585,7 +628,7 @@ def save_session_stub(db: Session, portal_account_id: int, storage_note: str = "
         .first()
     )
     if runs:
-        return save_session_for_run(db, runs.id)
+        return await save_session_for_run(db, runs.id)
     return {
         "success": False,
         "message": (

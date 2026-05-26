@@ -79,14 +79,26 @@ export default function Portals() {
 
   const runAction = async (label: string, fn: () => Promise<Record<string, unknown>>) => {
     setMessage(`${label}…`);
+    setScreenshotUrl(null);
     try {
       const r = await fn();
-      setMessage(String(r.message || JSON.stringify(r)));
+      const err = r.error ? String(r.error) : "";
+      if (r.success === false) {
+        setMessage(err || String(r.message || "Run failed"));
+      } else {
+        setMessage(String(r.message || JSON.stringify(r)));
+      }
       if (r.run_id || r.portal_run_id) {
         const runId = Number(r.run_id || r.portal_run_id);
-        const run = await api.portals.getRun(runId);
-        setActiveRun(run as RunState);
-        setScreenshotUrl(api.portals.screenshotUrl(runId));
+        const run = (await api.portals.getRun(runId)) as RunState & { screenshot_url?: string };
+        setActiveRun(run);
+        const shot =
+          typeof r.screenshot_url === "string"
+            ? r.screenshot_url
+            : run.screenshot_url || null;
+        setScreenshotUrl(
+          shot && run.status !== "failed" ? api.portals.screenshotUrl(runId) : null
+        );
       }
       if (selectedId) {
         const opps = await api.portals.opportunities(selectedId);
@@ -235,9 +247,16 @@ export default function Portals() {
                   </div>
                 )}
                 {activeRun.errors && <p className="text-red-300">{activeRun.errors}</p>}
-                {screenshotUrl && (
-                  <img src={screenshotUrl} alt="Portal screenshot" className="rounded border border-hive-border max-h-64" />
-                )}
+                {screenshotUrl ? (
+                  <img
+                    src={screenshotUrl}
+                    alt="Portal screenshot"
+                    className="rounded border border-hive-border max-h-64"
+                    onError={() => setScreenshotUrl(null)}
+                  />
+                ) : activeRun.status === "failed" ? (
+                  <p className="text-xs text-hive-muted">No screenshot available for this failed run.</p>
+                ) : null}
               </div>
             )}
 

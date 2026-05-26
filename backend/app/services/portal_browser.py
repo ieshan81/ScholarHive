@@ -1,21 +1,18 @@
-"""Playwright browser layer — no stealth, no CAPTCHA/2FA bypass."""
+"""Playwright browser layer — async API, no stealth, no CAPTCHA/2FA bypass."""
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_PLAYWRIGHT_MODULE = None
 _LAST_ERROR: str | None = None
 _CHROMIUM_OK: bool | None = None
 
@@ -116,8 +113,12 @@ def screenshot_path(run_id: int) -> Path:
     return Path(dirs["screenshots_dir"]) / f"run_{run_id}.png"
 
 
-def check_playwright_available() -> dict[str, Any]:
-    global _PLAYWRIGHT_MODULE, _LAST_ERROR, _CHROMIUM_OK
+def screenshot_exists(run_id: int) -> bool:
+    return screenshot_path(run_id).is_file()
+
+
+async def check_playwright_available() -> dict[str, Any]:
+    global _LAST_ERROR, _CHROMIUM_OK
     settings = get_settings()
     if os.environ.get("PLAYWRIGHT_ENABLED", "true").lower() in ("0", "false", "no"):
         return {
@@ -127,9 +128,7 @@ def check_playwright_available() -> dict[str, Any]:
         }
 
     try:
-        from playwright.sync_api import sync_playwright
-
-        _PLAYWRIGHT_MODULE = sync_playwright
+        from playwright.async_api import async_playwright  # noqa: F401
     except Exception as exc:
         _LAST_ERROR = f"playwright import failed: {exc}"
         _CHROMIUM_OK = False
@@ -143,14 +142,18 @@ def check_playwright_available() -> dict[str, Any]:
         }
 
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-            ctx = browser.new_context()
-            page = ctx.new_page()
-            page.goto("https://example.com", timeout=20000, wait_until="domcontentloaded")
-            page.close()
-            ctx.close()
-            browser.close()
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"]
+            )
+            ctx = await browser.new_context()
+            page = await ctx.new_page()
+            await page.goto("https://example.com", timeout=20000, wait_until="domcontentloaded")
+            await page.close()
+            await ctx.close()
+            await browser.close()
         _CHROMIUM_OK = True
         _LAST_ERROR = None
     except Exception as exc:
@@ -171,30 +174,30 @@ def _browser_mode() -> str:
     return "local"
 
 
-def _launch_browser(headed: bool = False):
-    from playwright.sync_api import sync_playwright
+async def _launch_browser(headed: bool = False):
+    from playwright.async_api import async_playwright
 
-    pw = sync_playwright().start()
-    browser = pw.chromium.launch(
+    pw = await async_playwright().start()
+    browser = await pw.chromium.launch(
         headless=not headed,
         args=["--no-sandbox", "--disable-dev-shm-usage"],
     )
     return pw, browser
 
 
-def _new_context(browser, storage_state: str | None = None):
+async def _new_context(browser, storage_state: str | None = None):
     opts: dict[str, Any] = {
         "viewport": {"width": 1280, "height": 900},
         "user_agent": "ScholarHivePortalAgent/1.0",
     }
     if storage_state and Path(storage_state).is_file():
         opts["storage_state"] = storage_state
-    return browser.new_context(**opts)
+    return await browser.new_context(**opts)
 
 
-def detect_checkpoint(page) -> CheckpointResult:
+async def detect_checkpoint(page) -> CheckpointResult:
     try:
-        body = (page.inner_text("body") or "")[:15000].lower()
+        body = ((await page.inner_text("body")) or "")[:15000].lower()
         url = (page.url or "").lower()
         combined = f"{body} {url}"
         for pattern, ctype in CHECKPOINT_PATTERNS:
@@ -204,15 +207,17 @@ def detect_checkpoint(page) -> CheckpointResult:
                     checkpoint_type=ctype,
                     reason=f"Detected signal: {ctype.replace('_', ' ')}",
                 )
-        if page.locator('input[type="password"]').count() > 0 and re.search(r"sign|log\s*in", combined):
+        if await page.locator('input[type="password"]').count() > 0 and re.search(
+            r"sign|log\s*in", combined
+        ):
             return CheckpointResult(True, "login_required", "Password field on page")
     except Exception as exc:
         logger.debug("checkpoint detect error: %s", exc)
     return CheckpointResult(False)
 
 
-def detect_login_required(page) -> bool:
-    cp = detect_checkpoint(page)
+async def detect_login_required(page) -> bool:
+    cp = await detect_checkpoint(page)
     return cp.detected and cp.checkpoint_type in (
         "login_required",
         "google_consent",
@@ -222,11 +227,11 @@ def detect_login_required(page) -> bool:
     )
 
 
-def take_screenshot(page, run_id: int) -> str | None:
+async def take_screenshot(page, run_id: int) -> str | None:
     path = screenshot_path(run_id)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(path), full_page=False)
+        await page.screenshot(path=str(path), full_page=False)
         return str(path)
     except Exception as exc:
         logger.warning("screenshot failed: %s", exc)
@@ -248,18 +253,18 @@ def _classify_link(text: str, href: str) -> str:
     return "irrelevant"
 
 
-def extract_links(page, base_url: str) -> list[ExtractedLink]:
+async def extract_links(page, base_url: str) -> list[ExtractedLink]:
     results: list[ExtractedLink] = []
     seen: set[str] = set()
     try:
-        anchors = page.eval_on_selector_all(
+        anchors = await page.eval_on_selector_all(
             "a[href]",
             """els => els.slice(0, 200).map(a => ({
                 text: (a.innerText || '').trim().slice(0, 200),
                 href: a.href
             }))""",
         )
-        page_text = (page.inner_text("body") or "")[:5000]
+        page_text = ((await page.inner_text("body")) or "")[:5000]
         deadline_m = DEADLINE_HINT.search(page_text)
         award_m = AWARD_HINT.search(page_text)
         deadline_hint = deadline_m.group(0) if deadline_m else None
@@ -291,13 +296,13 @@ def extract_links(page, base_url: str) -> list[ExtractedLink]:
     return results
 
 
-def extract_form_fields(page) -> dict[str, Any]:
+async def extract_form_fields(page) -> dict[str, Any]:
     """Foundation for ApplicationFormDraft — read-only, no submit."""
     fields: list[dict] = []
     essays: list[dict] = []
     uploads: list[dict] = []
     try:
-        inputs = page.eval_on_selector_all(
+        inputs = await page.eval_on_selector_all(
             "input, textarea, select",
             """els => els.slice(0, 80).map(el => ({
                 tag: el.tagName.toLowerCase(),
@@ -323,7 +328,7 @@ def extract_form_fields(page) -> dict[str, Any]:
             if inp.get("type") == "file":
                 uploads.append(entry)
 
-        submit_buttons = page.eval_on_selector_all(
+        submit_buttons = await page.eval_on_selector_all(
             'button[type="submit"], input[type="submit"]',
             "els => els.map(e => (e.innerText || e.value || 'Submit').trim())",
         )
@@ -339,8 +344,27 @@ def extract_form_fields(page) -> dict[str, Any]:
     }
 
 
-def scan_page(url: str, run_id: int | None = None, storage_state: str | None = None, headed: bool = False) -> PageScanResult:
-    check = check_playwright_available()
+async def _close_browser_objects(page=None, context=None, browser=None, pw=None) -> None:
+    for obj in (page, context, browser):
+        if obj:
+            try:
+                await obj.close()
+            except Exception:
+                pass
+    if pw:
+        try:
+            await pw.stop()
+        except Exception:
+            pass
+
+
+async def scan_page(
+    url: str,
+    run_id: int | None = None,
+    storage_state: str | None = None,
+    headed: bool = False,
+) -> PageScanResult:
+    check = await check_playwright_available()
     if not check.get("chromium_available"):
         return PageScanResult(
             url=url,
@@ -355,51 +379,49 @@ def scan_page(url: str, run_id: int | None = None, storage_state: str | None = N
     page = None
     try:
         headed = headed and _browser_mode() == "local"
-        pw, browser = _launch_browser(headed=headed)
-        context = _new_context(browser, storage_state)
-        page = context.new_page()
+        pw, browser = await _launch_browser(headed=headed)
+        context = await _new_context(browser, storage_state)
+        page = await context.new_page()
         page.set_default_timeout(30000)
-        page.goto(url, wait_until="domcontentloaded", timeout=45000)
-        page.wait_for_timeout(1500)
+        await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        await page.wait_for_timeout(1500)
 
-        checkpoint = detect_checkpoint(page)
-        links = extract_links(page, page.url)
-        shot = take_screenshot(page, run_id) if run_id else None
+        checkpoint = await detect_checkpoint(page)
+        final_url = page.url
+        title = (await page.title()) or ""
+        links = await extract_links(page, final_url)
+        login_required = await detect_login_required(page)
+        shot = await take_screenshot(page, run_id) if run_id else None
 
         if run_id is not None:
             _ACTIVE[run_id] = {"playwright": pw, "browser": browser, "context": context, "page": page}
+        else:
+            await _close_browser_objects(page, context, browser, pw)
 
         return PageScanResult(
-            url=page.url,
-            title=page.title() or "",
+            url=final_url,
+            title=title,
             checkpoint=checkpoint,
             links=links,
             screenshot_path=shot,
-            login_required=detect_login_required(page),
+            login_required=login_required,
         )
     except Exception as exc:
-        for obj in (page, context, browser):
-            try:
-                if obj:
-                    obj.close()
-            except Exception:
-                pass
-        if pw:
-            try:
-                pw.stop()
-            except Exception:
-                pass
+        await _close_browser_objects(page, context, browser, pw)
         if run_id and run_id in _ACTIVE:
             del _ACTIVE[run_id]
+        err = str(exc)
+        if "Sync API inside the asyncio loop" in err:
+            err = "Playwright async API misconfiguration — report to maintainer"
         return PageScanResult(
             url=url,
             title="",
             checkpoint=CheckpointResult(False),
-            error=str(exc),
+            error=err,
         )
 
 
-def save_storage_state(run_id: int, portal_account_id: int) -> dict[str, Any]:
+async def save_storage_state(run_id: int, portal_account_id: int) -> dict[str, Any]:
     active = _ACTIVE.get(run_id)
     if not active or not active.get("context"):
         path = session_storage_path(portal_account_id)
@@ -417,30 +439,23 @@ def save_storage_state(run_id: int, portal_account_id: int) -> dict[str, Any]:
     path = session_storage_path(portal_account_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        active["context"].storage_state(path=str(path))
-        close_run_browser(run_id)
+        await active["context"].storage_state(path=str(path))
+        await close_run_browser(run_id)
         return {"success": True, "path": str(path), "message": "Session storage saved"}
     except Exception as exc:
         return {"success": False, "message": str(exc)}
 
 
-def close_run_browser(run_id: int) -> None:
+async def close_run_browser(run_id: int) -> None:
     active = _ACTIVE.pop(run_id, None)
     if not active:
         return
-    for key in ("page", "context", "browser"):
-        try:
-            obj = active.get(key)
-            if obj:
-                obj.close()
-        except Exception:
-            pass
-    pw = active.get("playwright")
-    if pw:
-        try:
-            pw.stop()
-        except Exception:
-            pass
+    await _close_browser_objects(
+        active.get("page"),
+        active.get("context"),
+        active.get("browser"),
+        active.get("playwright"),
+    )
 
 
 def has_active_browser(run_id: int) -> bool:
