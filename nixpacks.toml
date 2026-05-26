@@ -9,7 +9,6 @@ nixPkgs = [
   "libffi",
   "pcre2",
   "libselinux",
-  "libmount",
   "nss",
   "nspr",
   "dbus",
