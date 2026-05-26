@@ -32,6 +32,13 @@ BLOCKED_PORTAL_DOMAINS = frozenset({
     "cloudfront.net",
     "doubleclick.net",
     "googlesyndication.com",
+    "go.anything.com",
+    "ablink.r.sofi.com",
+    "post.spmailtechno.com",
+    "linkedin.com",
+    "itunes.apple.com",
+    "apps.apple.com",
+    "play.google.com",
 })
 
 TRACKING_DOMAIN_SUBSTRINGS = (

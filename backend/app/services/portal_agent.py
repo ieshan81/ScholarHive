@@ -15,6 +15,7 @@ from app.models.portal import (
     PortalSession,
 )
 from app.services import portal_browser as browser
+from app.services.opportunity_quality import classify_portal_link
 from app.services.portal_domain import quick_canonical_domain
 
 
@@ -145,39 +146,94 @@ def _save_opportunities(
     run: PortalRun,
     links: list,
     portal: Portal,
-) -> int:
-    saved = 0
+) -> dict[str, int]:
+    accepted = rejected = needs_review = 0
+    portal_domain = portal.canonical_domain or portal.domain
+
     for link in links:
-        if link.link_type not in ("scholarship_detail", "application_link"):
+        title = (link.text or "").strip()[:500]
+        href = (link.href or "").strip()
+        if len(title) < 3 and len(href) < 8:
             continue
-        title = (link.text or "Scholarship opportunity")[:500]
-        if len(title) < 5:
-            continue
+
+        quality = classify_portal_link(
+            title or href[:80],
+            href,
+            link.context or "",
+            portal_domain=portal_domain,
+        )
+
+        if quality["save"]:
+            quality_status = "accepted"
+        elif quality["confidence"] >= 45 and quality["classification"] == "unknown":
+            quality_status = "needs_review"
+        else:
+            quality_status = "rejected"
+
+        canonical = quality.get("canonical_url") or href
         existing = (
             db.query(PortalOpportunity)
-            .filter(PortalOpportunity.portal_account_id == account.id, PortalOpportunity.title == title)
+            .filter(
+                PortalOpportunity.portal_account_id == account.id,
+                PortalOpportunity.canonical_url == canonical,
+            )
             .first()
         )
+        if not existing:
+            existing = (
+                db.query(PortalOpportunity)
+                .filter(PortalOpportunity.portal_account_id == account.id, PortalOpportunity.title == title)
+                .first()
+            )
         if existing:
+            existing.link_classification = quality["classification"]
+            existing.quality_score = quality["confidence"]
+            existing.quality_reason = quality["reason"]
+            existing.quality_status = quality_status
+            existing.canonical_url = canonical
             continue
+
         opp = PortalOpportunity(
             portal_account_id=account.id,
             portal_run_id=run.id,
-            title=title,
+            title=title or href[:80],
             provider=portal.portal_name or portal.domain,
-            portal_url=link.href,
-            application_url=link.href if link.link_type == "application_link" else None,
+            portal_url=href,
+            application_url=href if quality["classification"] == "application_page" else None,
             deadline=link.deadline_hint,
             award_amount=link.award_hint,
             eligibility_summary=link.context[:500] if link.context else None,
             status_in_portal="discovered",
-            extracted_fields_json={"link_type": link.link_type, "href": link.href},
+            quality_status=quality_status,
+            quality_reason=quality["reason"],
+            quality_score=quality["confidence"],
+            link_classification=quality["classification"],
+            canonical_url=canonical,
+            extracted_fields_json={
+                "link_type": getattr(link, "link_type", None),
+                "href": href,
+                "context": (link.context or "")[:300],
+            },
         )
         db.add(opp)
-        saved += 1
-    if saved:
-        portal.opportunities_discovered = (portal.opportunities_discovered or 0) + saved
-    return saved
+        if quality_status == "accepted":
+            accepted += 1
+        elif quality_status == "needs_review":
+            needs_review += 1
+        else:
+            rejected += 1
+
+    if accepted:
+        portal.opportunities_discovered = (
+            db.query(PortalOpportunity)
+            .filter(
+                PortalOpportunity.portal_account_id == account.id,
+                PortalOpportunity.quality_status == "accepted",
+            )
+            .count()
+        )
+
+    return {"accepted": accepted, "rejected": rejected, "needs_review": needs_review}
 
 
 def _run_to_dict(run: PortalRun, checkpoint: PortalCheckpoint | None = None) -> dict:
@@ -345,8 +401,8 @@ async def scan_public_portal(db: Session, portal_id: int) -> dict:
             scan.checkpoint.reason or "Human checkpoint required",
         )
     else:
-        saved = _save_opportunities(db, account, run, scan.links, portal)
-        run.opportunities_found = saved
+        counts = _save_opportunities(db, account, run, scan.links, portal)
+        run.opportunities_found = counts["accepted"]
         run.status = "completed"
         run.finished_at = datetime.utcnow()
         portal.last_scanned_at = datetime.utcnow()
@@ -356,22 +412,38 @@ async def scan_public_portal(db: Session, portal_id: int) -> dict:
         run.audit_log_summary = json.dumps(
             {
                 "links_found": len(scan.links),
-                "opportunities_saved": saved,
+                "opportunities_saved": counts["accepted"],
+                "opportunities_rejected": counts["rejected"],
+                "opportunities_needs_review": counts["needs_review"],
                 "login_required": scan.login_required,
             }
         )
 
     db.commit()
+    audit: dict = {}
+    if run.audit_log_summary:
+        try:
+            audit = json.loads(run.audit_log_summary)
+        except Exception:
+            audit = {}
+    scan_message = "Public scan complete"
+    if run.status == "completed" and run.opportunities_found == 0:
+        if audit.get("opportunities_rejected", 0) > 0:
+            scan_message = (
+                "No individual opportunities found. This scan mostly found category/navigation links."
+            )
+
     return {
         "success": run.status != "failed",
         "run_id": run.id,
         "status": run.status,
         "opportunities_found": run.opportunities_found,
+        "opportunities_rejected": audit.get("opportunities_rejected", 0),
         "links_extracted": len(scan.links),
         "login_required": scan.login_required,
         "checkpoint_id": checkpoint.id if checkpoint else None,
         "screenshot_url": _screenshot_url_for_run(run),
-        "message": "Public scan complete" if run.status == "completed" else "Checkpoint required",
+        "message": scan_message if run.status == "completed" else "Checkpoint required",
     }
 
 
@@ -442,8 +514,8 @@ async def scan_with_session(db: Session, portal_id: int) -> dict:
         db.commit()
         return {"success": False, "status": "human_checkpoint_required", "checkpoint_id": cp.id}
 
-    saved = _save_opportunities(db, account, run, scan.links, portal)
-    run.opportunities_found = saved
+    counts = _save_opportunities(db, account, run, scan.links, portal)
+    run.opportunities_found = counts["accepted"]
     run.status = "completed"
     run.finished_at = datetime.utcnow()
     run.latest_screenshot_path = scan.screenshot_path
@@ -457,9 +529,9 @@ async def scan_with_session(db: Session, portal_id: int) -> dict:
     return {
         "success": True,
         "run_id": run.id,
-        "opportunities_found": saved,
+        "opportunities_found": counts["accepted"],
         "screenshot_url": _screenshot_url_for_run(run),
-        "message": f"Session scan complete — {saved} opportunities",
+        "message": f"Session scan complete — {counts['accepted']} accepted opportunities",
     }
 
 
@@ -513,8 +585,8 @@ async def continue_after_checkpoint(db: Session, run_id: int) -> dict:
         db.commit()
         return {"success": False, "status": "human_checkpoint_required", "checkpoint_id": cp.id}
 
-    saved = _save_opportunities(db, account, run, scan.links, portal)
-    run.opportunities_found = (run.opportunities_found or 0) + saved
+    counts = _save_opportunities(db, account, run, scan.links, portal)
+    run.opportunities_found = (run.opportunities_found or 0) + counts["accepted"]
     run.status = "completed"
     run.finished_at = datetime.utcnow()
     run.latest_screenshot_path = scan.screenshot_path
@@ -523,7 +595,7 @@ async def continue_after_checkpoint(db: Session, run_id: int) -> dict:
     db.commit()
     return {
         "success": True,
-        "message": f"Continued — {saved} new opportunities",
+        "message": f"Continued — {counts['accepted']} new accepted opportunities",
         "run_id": run_id,
         "screenshot_url": _screenshot_url_for_run(run),
     }
@@ -587,30 +659,70 @@ def get_run(db: Session, run_id: int) -> dict | None:
     return _run_to_dict(run, cp)
 
 
-def list_opportunities(db: Session, portal_id: int) -> list[dict]:
+def _opportunity_to_dict(r: PortalOpportunity) -> dict:
+    return {
+        "id": r.id,
+        "title": r.title,
+        "portal_url": r.portal_url,
+        "application_url": r.application_url,
+        "canonical_url": r.canonical_url or r.portal_url,
+        "deadline": r.deadline,
+        "award_amount": r.award_amount,
+        "status_in_portal": r.status_in_portal,
+        "portal_run_id": r.portal_run_id,
+        "quality_status": getattr(r, "quality_status", None) or "accepted",
+        "quality_reason": getattr(r, "quality_reason", None),
+        "quality_score": getattr(r, "quality_score", None) or 0,
+        "link_classification": getattr(r, "link_classification", None),
+    }
+
+
+def opportunity_stats(db: Session, portal_id: int) -> dict:
+    account = db.query(PortalAccount).filter(PortalAccount.portal_id == portal_id).first()
+    if not account:
+        return {"accepted": 0, "rejected": 0, "needs_review": 0}
+    base = db.query(PortalOpportunity).filter(PortalOpportunity.portal_account_id == account.id)
+    return {
+        "accepted": base.filter(PortalOpportunity.quality_status == "accepted").count(),
+        "rejected": base.filter(PortalOpportunity.quality_status == "rejected").count(),
+        "needs_review": base.filter(PortalOpportunity.quality_status == "needs_review").count(),
+    }
+
+
+def list_opportunities(db: Session, portal_id: int, show_rejected: bool = False) -> list[dict]:
     account = db.query(PortalAccount).filter(PortalAccount.portal_id == portal_id).first()
     if not account:
         return []
-    rows = (
-        db.query(PortalOpportunity)
-        .filter(PortalOpportunity.portal_account_id == account.id)
-        .order_by(PortalOpportunity.created_at.desc())
-        .limit(100)
-        .all()
-    )
-    return [
-        {
-            "id": r.id,
-            "title": r.title,
-            "portal_url": r.portal_url,
-            "application_url": r.application_url,
-            "deadline": r.deadline,
-            "award_amount": r.award_amount,
-            "status_in_portal": r.status_in_portal,
-            "portal_run_id": r.portal_run_id,
-        }
-        for r in rows
-    ]
+    q = db.query(PortalOpportunity).filter(PortalOpportunity.portal_account_id == account.id)
+    if show_rejected:
+        q = q.filter(PortalOpportunity.quality_status.in_(("rejected", "needs_review")))
+    else:
+        q = q.filter(PortalOpportunity.quality_status == "accepted")
+    rows = q.order_by(PortalOpportunity.created_at.desc()).limit(200).all()
+    return [_opportunity_to_dict(r) for r in rows]
+
+
+def update_opportunity_quality(db: Session, opportunity_id: int, quality_status: str) -> dict:
+    if quality_status not in ("accepted", "rejected", "needs_review"):
+        return {"success": False, "message": "Invalid quality_status"}
+    opp = db.query(PortalOpportunity).filter(PortalOpportunity.id == opportunity_id).first()
+    if not opp:
+        return {"success": False, "message": "Opportunity not found"}
+    opp.quality_status = quality_status
+    account = db.query(PortalAccount).filter(PortalAccount.id == opp.portal_account_id).first()
+    if account:
+        portal = db.query(Portal).filter(Portal.id == account.portal_id).first()
+        if portal:
+            portal.opportunities_discovered = (
+                db.query(PortalOpportunity)
+                .filter(
+                    PortalOpportunity.portal_account_id == account.id,
+                    PortalOpportunity.quality_status == "accepted",
+                )
+                .count()
+            )
+    db.commit()
+    return {"success": True, "id": opportunity_id, "quality_status": quality_status}
 
 
 async def open_portal_session(db: Session, portal_id: int) -> dict:

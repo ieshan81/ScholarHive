@@ -131,7 +131,19 @@ export const api = {
       request<Record<string, unknown>>(`/api/portals/runs/${runId}/save-session`, { method: "POST" }),
     getRun: (runId: number) => request<Record<string, unknown>>(`/api/portals/runs/${runId}`),
     screenshotUrl: (runId: number) => `${import.meta.env.VITE_API_URL || ""}/api/portals/runs/${runId}/screenshot`,
-    opportunities: (portalId: number) => request<unknown[]>(`/api/portals/${portalId}/opportunities`),
+    opportunities: (portalId: number, showRejected = false) =>
+      request<unknown[]>(
+        `/api/portals/${portalId}/opportunities${showRejected ? "?show_rejected=true" : ""}`
+      ),
+    opportunityStats: (portalId: number) =>
+      request<Record<string, unknown>>(`/api/portals/${portalId}/opportunity-stats`),
+    cleanupOpportunities: () =>
+      request<Record<string, unknown>>("/api/portals/cleanup-opportunities", { method: "POST" }),
+    setOpportunityQuality: (opportunityId: number, quality_status: string) =>
+      request<Record<string, unknown>>(`/api/portals/opportunities/${opportunityId}/quality`, {
+        method: "PATCH",
+        body: JSON.stringify({ quality_status }),
+      }),
     cleanupSession: (portalId: number) =>
       request<Record<string, unknown>>(`/api/portals/${portalId}/cleanup-session`, { method: "POST" }),
   },

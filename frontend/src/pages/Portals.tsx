@@ -7,6 +7,7 @@ type Portal = {
   id: number;
   domain: string;
   canonical_domain?: string;
+  domain_status?: string;
   portal_name?: string;
   portal_url?: string;
   source_count: number;
@@ -36,23 +37,32 @@ type RunState = {
   checkpoint?: { type: string; instruction: string; status: string };
 };
 
+type OppStats = { accepted: number; rejected: number; needs_review: number };
+
 type Opportunity = {
   id: number;
   title: string;
   portal_url?: string;
   application_url?: string;
+  canonical_url?: string;
   deadline?: string;
   award_amount?: string;
+  quality_status?: string;
+  quality_reason?: string;
+  quality_score?: number;
+  link_classification?: string;
 };
 
 export default function Portals() {
   const [portals, setPortals] = useState<Portal[]>([]);
   const [agent, setAgent] = useState<AgentStatus>({});
   const [showTracking, setShowTracking] = useState(false);
+  const [showRejected, setShowRejected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [activeRun, setActiveRun] = useState<RunState | null>(null);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [oppStats, setOppStats] = useState<OppStats>({ accepted: 0, rejected: 0, needs_review: 0 });
   const [message, setMessage] = useState("");
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
@@ -65,16 +75,31 @@ export default function Portals() {
     });
   };
 
+  const loadOpportunities = async (portalId: number, rejected: boolean) => {
+    const [opps, stats] = await Promise.all([
+      api.portals.opportunities(portalId, rejected),
+      api.portals.opportunityStats(portalId),
+    ]);
+    setOpportunities(opps as Opportunity[]);
+    setOppStats(stats as OppStats);
+  };
+
   useEffect(() => {
     load();
   }, [showTracking]);
+
+  useEffect(() => {
+    if (selectedId) {
+      loadOpportunities(selectedId, showRejected);
+    }
+  }, [selectedId, showRejected]);
 
   const selectPortal = async (id: number) => {
     setSelectedId(id);
     setActiveRun(null);
     setScreenshotUrl(null);
-    const opps = await api.portals.opportunities(id);
-    setOpportunities(opps as Opportunity[]);
+    setShowRejected(false);
+    await loadOpportunities(id, false);
   };
 
   const runAction = async (label: string, fn: () => Promise<Record<string, unknown>>) => {
@@ -101,12 +126,19 @@ export default function Portals() {
         );
       }
       if (selectedId) {
-        const opps = await api.portals.opportunities(selectedId);
-        setOpportunities(opps as Opportunity[]);
+        await loadOpportunities(selectedId, showRejected);
       }
       load();
     } catch (e: unknown) {
       setMessage(e instanceof Error ? e.message : "Action failed");
+    }
+  };
+
+  const setQuality = async (oppId: number, status: string) => {
+    await api.portals.setOpportunityQuality(oppId, status);
+    if (selectedId) {
+      await loadOpportunities(selectedId, showRejected);
+      load();
     }
   };
 
@@ -141,10 +173,21 @@ export default function Portals() {
         </ul>
       )}
 
-      <label className="flex items-center gap-2 text-sm text-hive-muted mb-4">
-        <input type="checkbox" checked={showTracking} onChange={(e) => setShowTracking(e.target.checked)} />
-        Show ignored tracking domains
-      </label>
+      <div className="flex flex-wrap gap-4 mb-4">
+        <label className="flex items-center gap-2 text-sm text-hive-muted">
+          <input type="checkbox" checked={showTracking} onChange={(e) => setShowTracking(e.target.checked)} />
+          Show ignored tracking domains
+        </label>
+        <button
+          type="button"
+          className="btn-secondary text-sm"
+          onClick={() =>
+            runAction("Clean bad portal links", () => api.portals.cleanupOpportunities())
+          }
+        >
+          Clean bad portal links
+        </button>
+      </div>
 
       {message && <p className="text-sm mb-4 p-2 rounded bg-hive-panel">{message}</p>}
 
@@ -161,11 +204,13 @@ export default function Portals() {
               >
                 <h3 className="font-semibold">{p.portal_name || p.domain}</h3>
                 <p className="text-xs text-hive-muted">
-                  {p.canonical_domain || p.domain} · {p.source_count} sources
+                  {p.canonical_domain || p.domain}
+                  {p.domain_status && p.domain_status !== "active" ? ` · ${p.domain_status}` : ""} ·{" "}
+                  {p.source_count} sources
                 </p>
                 <p className="text-sm mt-1">
-                  Session: {p.session_status} · Opportunities: {p.opportunities_discovered} · Checkpoints:{" "}
-                  {p.checkpoints_pending}
+                  Session: {p.session_status} · Accepted opportunities: {p.opportunities_discovered} ·
+                  Checkpoints: {p.checkpoints_pending}
                 </p>
               </button>
             ))
@@ -261,16 +306,70 @@ export default function Portals() {
             )}
 
             <div>
-              <h4 className="font-medium text-sm mb-2">Discovered opportunities ({opportunities.length})</h4>
-              <ul className="max-h-48 overflow-auto space-y-2 text-sm">
+              <p className="text-xs text-hive-muted mb-2">
+                Accepted: {oppStats.accepted} · Needs review: {oppStats.needs_review} · Ignored/rejected:{" "}
+                {oppStats.rejected}
+              </p>
+              <label className="flex items-center gap-2 text-sm text-hive-muted mb-2">
+                <input
+                  type="checkbox"
+                  checked={showRejected}
+                  onChange={(e) => setShowRejected(e.target.checked)}
+                />
+                Show ignored / rejected links
+              </label>
+              <h4 className="font-medium text-sm mb-2">
+                {showRejected ? "Ignored links" : "Accepted opportunities"} ({opportunities.length})
+              </h4>
+              <ul className="max-h-64 overflow-auto space-y-2 text-sm">
                 {opportunities.map((o) => (
                   <li key={o.id} className="border-t border-hive-border pt-2">
                     <p className="font-medium">{o.title}</p>
-                    {o.application_url && (
-                      <a href={o.application_url} className="text-xs text-hive-gold" target="_blank" rel="noreferrer">
-                        Application link
+                    <p className="text-xs text-hive-muted">
+                      {o.link_classification} · score {o.quality_score} · {o.quality_status}
+                    </p>
+                    {o.quality_reason && (
+                      <p className="text-xs text-hive-muted italic">{o.quality_reason}</p>
+                    )}
+                    {(o.canonical_url || o.application_url) && (
+                      <a
+                        href={o.canonical_url || o.application_url}
+                        className="text-xs text-hive-gold break-all"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open source
                       </a>
                     )}
+                    <div className="flex gap-2 mt-1">
+                      {o.quality_status !== "accepted" && (
+                        <button
+                          type="button"
+                          className="text-xs text-hive-gold"
+                          onClick={() => setQuality(o.id, "accepted")}
+                        >
+                          Mark accepted
+                        </button>
+                      )}
+                      {o.quality_status !== "rejected" && (
+                        <button
+                          type="button"
+                          className="text-xs text-red-300"
+                          onClick={() => setQuality(o.id, "rejected")}
+                        >
+                          Reject
+                        </button>
+                      )}
+                      {o.quality_status !== "needs_review" && (
+                        <button
+                          type="button"
+                          className="text-xs text-hive-muted"
+                          onClick={() => setQuality(o.id, "needs_review")}
+                        >
+                          Needs review
+                        </button>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>

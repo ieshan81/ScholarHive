@@ -65,6 +65,14 @@ PORTAL_SESSION_COLUMNS = {
     "last_validated_at": "TIMESTAMP",
 }
 
+PORTAL_OPPORTUNITY_COLUMNS = {
+    "quality_status": "VARCHAR(50) DEFAULT 'accepted'",
+    "quality_reason": "TEXT",
+    "quality_score": "INTEGER DEFAULT 0",
+    "link_classification": "VARCHAR(80)",
+    "canonical_url": "VARCHAR(1000)",
+}
+
 
 def _add_columns(table: str, columns: dict) -> None:
     insp = inspect(engine)
@@ -94,3 +102,4 @@ def run_migrations() -> None:
     _add_columns("gmail_messages", GMAIL_MESSAGE_COLUMNS)
     _add_columns("portal_runs", PORTAL_RUN_COLUMNS)
     _add_columns("portal_sessions", PORTAL_SESSION_COLUMNS)
+    _add_columns("portal_opportunities", PORTAL_OPPORTUNITY_COLUMNS)

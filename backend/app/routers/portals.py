@@ -14,13 +14,16 @@ from app.services.portal_agent import (
     get_run,
     list_opportunities,
     open_portal_session,
+    opportunity_stats,
     portal_agent_status,
     save_session_for_run,
     save_session_stub,
     scan_public_portal,
     scan_with_session,
     start_browser_session,
+    update_opportunity_quality,
 )
+from app.services.portal_opportunity_cleanup import cleanup_opportunities
 from app.services import portal_browser as browser
 
 router = APIRouter(prefix="/api/portals", tags=["portals"])
@@ -39,7 +42,7 @@ async def list_portals(show_tracking: bool = Query(False), db: Session = Depends
             "id": p.id,
             "domain": p.domain,
             "canonical_domain": p.canonical_domain or p.domain,
-            "domain_status": p.domain_status,
+            "domain_status": p.domain_status or "active",
             "portal_name": p.portal_name,
             "portal_url": p.portal_url,
             "source_count": p.source_count,
@@ -57,6 +60,12 @@ async def list_portals(show_tracking: bool = Query(False), db: Session = Depends
 @router.post("/cleanup-domains")
 def cleanup(db: Session = Depends(get_db)):
     return cleanup_portal_domains(db)
+
+
+@router.post("/cleanup-opportunities")
+def cleanup_opportunities_route(db: Session = Depends(get_db)):
+    cleanup_portal_domains(db)
+    return cleanup_opportunities(db)
 
 
 @router.get("/agent-status")
@@ -117,9 +126,34 @@ def get_screenshot(run_id: int, db: Session = Depends(get_db)):
     return FileResponse(path_str, media_type="image/png")
 
 
+@router.get("/{portal_id}/opportunity-stats")
+def portal_opportunity_stats(portal_id: int, db: Session = Depends(get_db)):
+    return opportunity_stats(db, portal_id)
+
+
 @router.get("/{portal_id}/opportunities")
-def portal_opportunities(portal_id: int, db: Session = Depends(get_db)):
-    return list_opportunities(db, portal_id)
+def portal_opportunities(
+    portal_id: int,
+    show_rejected: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    return list_opportunities(db, portal_id, show_rejected=show_rejected)
+
+
+class OpportunityQualityBody(BaseModel):
+    quality_status: str
+
+
+@router.patch("/opportunities/{opportunity_id}/quality")
+def patch_opportunity_quality(
+    opportunity_id: int,
+    body: OpportunityQualityBody,
+    db: Session = Depends(get_db),
+):
+    result = update_opportunity_quality(db, opportunity_id, body.quality_status)
+    if not result.get("success"):
+        raise HTTPException(400, result.get("message", "Update failed"))
+    return result
 
 
 @router.post("/{portal_id}/cleanup-session")
