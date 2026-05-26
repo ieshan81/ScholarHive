@@ -5,6 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
+    "startCommand": null,
     "healthcheckPath": "/health",
     "healthcheckTimeout": 120
   }
