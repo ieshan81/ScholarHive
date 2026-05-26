@@ -75,7 +75,9 @@ export default function GmailPage() {
             messages.map((m) => (
               <button
                 key={m.id}
-                onClick={() => setSelected(m)}
+                onClick={() => {
+                  api.gmail.getMessage(m.id).then((full) => setSelected(full as Msg)).catch(() => setSelected(m));
+                }}
                 className="card w-full text-left p-3 hover:border-hive-gold/50"
               >
                 <p className="font-medium text-sm line-clamp-1">{m.subject}</p>

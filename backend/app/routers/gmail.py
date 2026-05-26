@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -42,7 +42,7 @@ def get_message(message_id: int, db: Session = Depends(get_db)):
 
     m = db.query(GmailMessage).filter(GmailMessage.id == message_id).first()
     if not m:
-        return {"message": "Not found"}
+        raise HTTPException(404, "Message not found")
     return {
         "id": m.id,
         "subject": m.subject,

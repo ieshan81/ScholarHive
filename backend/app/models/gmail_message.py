@@ -20,6 +20,7 @@ class GmailMessage(Base):
     classification_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     discovery_candidate_id: Mapped[int | None] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="scanned")
+    scan_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

@@ -5,7 +5,6 @@ import base64
 import json
 import re
 from datetime import datetime
-from email.utils import parsedate_to_datetime
 
 from sqlalchemy.orm import Session
 
@@ -13,8 +12,9 @@ from app.config import get_settings
 from app.models.discovery import DiscoveryRun
 from app.models.gmail_message import GmailMessage
 from app.models.gmail_token import GmailToken
-from app.services.discovery_classifier import classify_candidate, extract_domain
+from app.services.discovery_classifier import classify_candidate
 from app.services.discovery_pipeline import create_candidate, process_candidate
+from app.services.portal_domain import quick_canonical_domain, resolve_portal_domain
 
 GMAIL_QUERY = (
     "(scholarship OR scholarships OR \"financial aid\" OR fellowship OR grant OR "
@@ -40,6 +40,18 @@ def _extract_links(text: str) -> list[str]:
     return re.findall(r"https?://[^\s<>\"']+", text or "")[:30]
 
 
+async def _portal_from_links(links: list[str]) -> str | None:
+    for link in links:
+        domain = quick_canonical_domain(link)
+        if domain:
+            return domain
+    for link in links[:5]:
+        domain, _ = await resolve_portal_domain(link, follow_redirects=True)
+        if domain:
+            return domain
+    return None
+
+
 def _get_gmail_service(db: Session):
     settings = get_settings()
     token = db.query(GmailToken).filter(GmailToken.id == 1).first()
@@ -63,13 +75,14 @@ def fetch_message_detail(service, msg_id: str) -> dict:
     msg = service.users().messages().get(userId="me", id=msg_id, format="full").execute()
     headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
     body = _decode_body(msg.get("payload", {}))
+    links = _extract_links(body)
     return {
         "gmail_id": msg_id,
         "subject": headers.get("Subject", ""),
         "sender": headers.get("From", ""),
         "snippet": msg.get("snippet", ""),
         "body_text": body,
-        "links": _extract_links(body),
+        "links": links,
         "received_at": headers.get("Date"),
     }
 
@@ -79,7 +92,7 @@ async def scan_gmail_v2(db: Session, days: int = 30, max_messages: int = 25) -> 
     if not settings.gmail_configured:
         return {"configured": False, "message": "Gmail not configured"}
 
-    service, token = _get_gmail_service(db)
+    service, _token = _get_gmail_service(db)
     if not service:
         return {"configured": True, "connected": False, "message": "Gmail not connected"}
 
@@ -90,12 +103,13 @@ async def scan_gmail_v2(db: Session, days: int = 30, max_messages: int = 25) -> 
 
     results = service.users().messages().list(userId="me", q=q, maxResults=max_messages).execute()
     messages = results.get("messages", [])
-    saved = dup = rejected = scanned = 0
+    saved = dup = rejected = scanned = classified = extracted = errors_count = 0
     errors: list[str] = []
 
     for msg_ref in messages:
+        msg_id = msg_ref["id"]
         try:
-            detail = fetch_message_detail(service, msg_ref["id"])
+            detail = fetch_message_detail(service, msg_id)
             scanned += 1
             existing = db.query(GmailMessage).filter(GmailMessage.gmail_id == detail["gmail_id"]).first()
             if existing:
@@ -107,6 +121,9 @@ async def scan_gmail_v2(db: Session, days: int = 30, max_messages: int = 25) -> 
                 "gmail",
                 detail["sender"],
             )
+            classified += 1
+            portal_domain = await _portal_from_links(detail["links"])
+
             gm = GmailMessage(
                 gmail_id=detail["gmail_id"],
                 subject=detail["subject"],
@@ -114,20 +131,22 @@ async def scan_gmail_v2(db: Session, days: int = 30, max_messages: int = 25) -> 
                 snippet=detail["snippet"],
                 body_text=detail["body_text"],
                 links_json=json.dumps(detail["links"]),
-                domain=extract_domain(detail["links"][0]) if detail["links"] else extract_domain(detail["sender"]),
+                domain=portal_domain,
                 classification=classification,
                 classification_reason=reason,
                 status="scanned",
+                scan_error=None,
             )
             db.add(gm)
             db.flush()
 
+            source_url = detail["links"][0] if detail["links"] else f"https://mail.google.com/mail/u/0/#inbox/{detail['gmail_id']}"
             cand = create_candidate(
                 db,
                 run.id,
                 "gmail",
                 detail["subject"] or "(no subject)",
-                detail["links"][0] if detail["links"] else f"https://mail.google.com/mail/u/0/#inbox/{detail['gmail_id']}",
+                source_url,
                 snippet=detail["snippet"],
                 sender=detail["sender"],
                 raw_content=detail["body_text"],
@@ -138,12 +157,28 @@ async def scan_gmail_v2(db: Session, days: int = 30, max_messages: int = 25) -> 
             saved += ps.get("saved", 0)
             dup += ps.get("duplicate", 0)
             rejected += ps.get("rejected", 0) + ps.get("source_page_only", 0)
+            extracted += ps.get("saved", 0)
             if classification in ("irrelevant", "spam", "loan", "marketing"):
                 gm.status = "rejected"
             elif ps.get("saved"):
                 gm.status = "opportunity_saved"
+            db.commit()
         except Exception as e:
-            errors.append(str(e))
+            errors_count += 1
+            err_msg = f"{msg_id}: {e}"
+            errors.append(err_msg)
+            try:
+                gm_err = GmailMessage(
+                    gmail_id=msg_id,
+                    subject="(scan error)",
+                    status="error",
+                    scan_error=str(e)[:500],
+                    classification="unknown",
+                )
+                db.add(gm_err)
+                db.commit()
+            except Exception:
+                db.rollback()
 
     run.total_candidates = scanned
     run.opportunities_saved = saved
@@ -157,11 +192,17 @@ async def scan_gmail_v2(db: Session, days: int = 30, max_messages: int = 25) -> 
     return {
         "configured": True,
         "connected": True,
-        "message": f"Gmail scan: {scanned} messages reviewed, {saved} scholarships saved, {rejected} rejected",
+        "message": (
+            f"Gmail scan: {scanned} scanned, {classified} classified, {saved} saved, "
+            f"{rejected} rejected, {errors_count} errors"
+        ),
         "scanned": scanned,
+        "classified": classified,
+        "extracted": extracted,
         "saved": saved,
         "duplicates_skipped": dup,
         "rejected_count": rejected,
+        "errors_count": errors_count,
         "errors": errors,
     }
 
@@ -184,6 +225,7 @@ def list_gmail_messages(db: Session, status: str | None = None) -> list[dict]:
             "classification": r.classification,
             "classification_reason": r.classification_reason,
             "status": r.status,
+            "scan_error": getattr(r, "scan_error", None),
             "discovery_candidate_id": r.discovery_candidate_id,
             "gmail_url": f"https://mail.google.com/mail/u/0/#inbox/{r.gmail_id}",
         }

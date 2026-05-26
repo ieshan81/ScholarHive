@@ -32,7 +32,14 @@ def get_config(db: Session = Depends(get_db)):
         "last_test_at": cfg.last_test_at.isoformat() if cfg.last_test_at else None,
         "last_test_status": cfg.last_test_status,
         "last_test_message": cfg.last_test_message,
+        "last_error_code": cfg.last_error_code,
+        "last_error_description": cfg.last_error_description,
     }
+
+
+@router.get("/diagnostics")
+async def diagnostics(db: Session = Depends(get_db)):
+    return await telegram_service.run_diagnostics(db)
 
 
 @router.put("/config")
@@ -66,7 +73,8 @@ async def webhook(
 @router.post("/send-test")
 async def send_test(body: SendTestRequest | None = None, db: Session = Depends(get_db)):
     chat_id = body.chat_id if body else None
-    return await tg_config.send_test(db, chat_id)
+    message = body.message if body else None
+    return await tg_config.send_test(db, chat_id, message)
 
 
 @router.post("/send-question")

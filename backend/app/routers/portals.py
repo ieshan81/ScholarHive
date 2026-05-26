@@ -1,20 +1,27 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.portal import Portal
 from app.services.portal_agent import open_portal_session, save_session_stub, portal_agent_status
+from app.services.portal_cleanup import cleanup_portal_domains
 
 router = APIRouter(prefix="/api/portals", tags=["portals"])
 
 
 @router.get("")
-def list_portals(db: Session = Depends(get_db)):
-    portals = db.query(Portal).order_by(Portal.source_count.desc()).all()
+def list_portals(show_tracking: bool = Query(False), db: Session = Depends(get_db)):
+    cleanup_portal_domains(db)
+    q = db.query(Portal).order_by(Portal.source_count.desc())
+    if not show_tracking:
+        q = q.filter(Portal.domain_status == "active")
+    portals = q.all()
     return [
         {
             "id": p.id,
             "domain": p.domain,
+            "canonical_domain": p.canonical_domain or p.domain,
+            "domain_status": p.domain_status,
             "portal_name": p.portal_name,
             "portal_url": p.portal_url,
             "source_count": p.source_count,
@@ -26,6 +33,11 @@ def list_portals(db: Session = Depends(get_db)):
         }
         for p in portals
     ]
+
+
+@router.post("/cleanup-domains")
+def cleanup(db: Session = Depends(get_db)):
+    return cleanup_portal_domains(db)
 
 
 @router.get("/agent-status")

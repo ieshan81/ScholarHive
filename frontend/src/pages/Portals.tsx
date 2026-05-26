@@ -16,22 +16,32 @@ type Portal = {
 export default function Portals() {
   const [portals, setPortals] = useState<Portal[]>([]);
   const [agent, setAgent] = useState<Record<string, unknown>>({});
+  const [showTracking, setShowTracking] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.all([api.portals.list(), api.portals.agentStatus()]).then(([p, a]) => {
+  const load = () => {
+    setLoading(true);
+    Promise.all([api.portals.list(showTracking), api.portals.agentStatus()]).then(([p, a]) => {
       setPortals(p as Portal[]);
       setAgent(a as Record<string, unknown>);
       setLoading(false);
     });
-  }, []);
+  };
+
+  useEffect(() => {
+    load();
+  }, [showTracking]);
 
   if (loading) return <Loading />;
 
   return (
     <div>
       <h2 className="text-2xl font-display text-hive-gold mb-2">Portal Registry</h2>
-      <p className="text-sm text-hive-muted mb-6">{String(agent.message)}</p>
+      <p className="text-sm text-hive-muted mb-4">{String(agent.message)}</p>
+      <label className="flex items-center gap-2 text-sm text-hive-muted mb-6">
+        <input type="checkbox" checked={showTracking} onChange={(e) => setShowTracking(e.target.checked)} />
+        Show ignored tracking domains (mail.google.com, aws tracking, etc.)
+      </label>
       {portals.length === 0 ? (
         <EmptyState title="No portals yet" hint="Run Web Search or Gmail scan — domains are grouped automatically." />
       ) : (

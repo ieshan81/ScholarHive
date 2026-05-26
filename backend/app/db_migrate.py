@@ -2,7 +2,6 @@
 from sqlalchemy import inspect, text
 from app.database import engine
 
-
 SCHOLARSHIP_COLUMNS = {
     "provider": "VARCHAR(500)",
     "application_url": "VARCHAR(1000)",
@@ -23,21 +22,63 @@ SCHOLARSHIP_COLUMNS = {
     "discovery_candidate_id": "INTEGER",
 }
 
+PORTAL_COLUMNS = {
+    "canonical_domain": "VARCHAR(255)",
+    "domain_status": "VARCHAR(50) DEFAULT 'active'",
+}
 
-def run_migrations() -> None:
+TELEGRAM_COLUMNS = {
+    "last_error_code": "INTEGER",
+    "last_error_description": "TEXT",
+}
+
+DOCUMENT_COLUMNS = {
+    "original_filename": "VARCHAR(500)",
+    "storage_path": "VARCHAR(1000)",
+    "extracted_text": "TEXT",
+    "extraction_status": "VARCHAR(50) DEFAULT 'pending'",
+    "processing_status": "VARCHAR(50) DEFAULT 'uploaded'",
+    "source_type": "VARCHAR(80) DEFAULT 'other'",
+    "extraction_error": "TEXT",
+}
+
+PROFILE_GRAPH_COLUMNS = {
+    "details": "TEXT",
+    "status": "VARCHAR(50) DEFAULT 'needs_review'",
+    "canonical_key": "VARCHAR(300)",
+    "importance_score": "FLOAT DEFAULT 0.5",
+    "used_in_essays_count": "INTEGER DEFAULT 0",
+    "legacy_story_id": "INTEGER",
+}
+
+GMAIL_MESSAGE_COLUMNS = {
+    "scan_error": "TEXT",
+}
+
+
+def _add_columns(table: str, columns: dict) -> None:
     insp = inspect(engine)
-    if "scholarships" not in insp.get_table_names():
+    if table not in insp.get_table_names():
         return
-    existing = {c["name"] for c in insp.get_columns("scholarships")}
+    existing = {c["name"] for c in insp.get_columns(table)}
     dialect = engine.dialect.name
     with engine.begin() as conn:
-        for col, col_type in SCHOLARSHIP_COLUMNS.items():
+        for col, col_type in columns.items():
             if col in existing:
                 continue
             if dialect == "postgresql":
-                conn.execute(text(f"ALTER TABLE scholarships ADD COLUMN IF NOT EXISTS {col} {col_type}"))
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}"))
             else:
                 try:
-                    conn.execute(text(f"ALTER TABLE scholarships ADD COLUMN {col} {col_type}"))
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
                 except Exception:
                     pass
+
+
+def run_migrations() -> None:
+    _add_columns("scholarships", SCHOLARSHIP_COLUMNS)
+    _add_columns("portals", PORTAL_COLUMNS)
+    _add_columns("telegram_user_config", TELEGRAM_COLUMNS)
+    _add_columns("documents", DOCUMENT_COLUMNS)
+    _add_columns("profile_graph_nodes", PROFILE_GRAPH_COLUMNS)
+    _add_columns("gmail_messages", GMAIL_MESSAGE_COLUMNS)

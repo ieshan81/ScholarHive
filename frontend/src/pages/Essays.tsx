@@ -58,7 +58,7 @@ export default function Essays() {
     <div>
       <h2 className="text-2xl font-display text-hive-gold mb-2">Essay Studio</h2>
       <p className="text-sm text-hive-muted mb-4">
-        Personal Voice Review — improves truthfulness and specificity, not AI-detector evasion
+        Drafts pull from Memory Vault automatically. Personal Voice Review improves truthfulness — not detector evasion.
       </p>
       {!geminiOk && (
         <ConfigBanner message="Gemini not configured — drafts require GEMINI_API_KEY" />

@@ -15,6 +15,7 @@ from app.schemas.essay import (
 )
 from app.services.gemini import generate_essay_draft
 from app.services.authenticity import review_essay, rewrite_essay_section
+from app.services.memory_vault import approved_memories_text, writing_style_samples
 from app.utils import exclude_demo
 
 router = APIRouter(prefix="/api/essays", tags=["essays"])
@@ -30,7 +31,15 @@ def _profile_text(profile: Profile | None) -> str:
     return "\n".join(p for p in parts if p)
 
 
+def _memory_context(db: Session) -> str:
+    return approved_memories_text(db)
+
+
 def _stories_text(db: Session) -> str:
+    """Legacy story bank — merged into memory context when empty."""
+    memories = _memory_context(db)
+    if memories:
+        return memories
     stories = exclude_demo(
         db.query(Story).filter(Story.verified_by_user.is_(True)),
         Story,
@@ -53,15 +62,21 @@ async def generate_essay(data: EssayGenerateRequest, db: Session = Depends(get_d
         sch.name,
         sch.essay_prompt or "Describe your goals and qualifications.",
         _profile_text(profile),
-        _stories_text(db),
+        _memory_context(db),
+        writing_style_samples(db),
     )
     if not result.get("configured"):
         raise HTTPException(503, result.get("message", "Gemini not configured"))
 
+    memories_used = result.get("memories_used") or []
+    draft = result.get("draft_text") or "[Draft unavailable — add content manually]"
+    if memories_used:
+        draft += "\n\n---\nMemories used: " + "; ".join(str(m) for m in memories_used[:12])
+
     essay = Essay(
         scholarship_id=sch.id,
         prompt=sch.essay_prompt,
-        draft_text=result.get("draft_text") or "[Draft unavailable — add content manually]",
+        draft_text=draft,
         status="needs_info" if result.get("missing_topics") else "draft",
         missing_evidence=result.get("missing_topics"),
         word_count=len((result.get("draft_text") or "").split()),

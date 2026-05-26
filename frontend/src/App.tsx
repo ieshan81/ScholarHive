@@ -13,6 +13,7 @@ import SettingsPage from "./pages/Settings";
 import WebSearch from "./pages/WebSearch";
 import Portals from "./pages/Portals";
 import ProfileGraph from "./pages/ProfileGraph";
+import MemoryVault from "./pages/MemoryVault";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/web-search" element={<WebSearch />} />
         <Route path="/queue" element={<Queue />} />
         <Route path="/essays" element={<Essays />} />
+        <Route path="/memory-vault" element={<MemoryVault />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/stories" element={<Stories />} />
         <Route path="/gmail" element={<Gmail />} />

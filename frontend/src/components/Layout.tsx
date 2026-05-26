@@ -5,29 +5,23 @@ import {
   Globe,
   Kanban,
   PenLine,
-  User,
-  BookOpen,
-  Network,
+  Brain,
   Globe2,
   Mail,
   MessageCircle,
-  FolderOpen,
   Settings,
 } from "lucide-react";
 
 const nav = [
-  { to: "/", label: "Mission Control", icon: LayoutDashboard },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/radar", label: "Scholarship Radar", icon: Radar },
   { to: "/web-search", label: "Web Search", icon: Globe },
+  { to: "/gmail", label: "Gmail Scanner", icon: Mail },
+  { to: "/portals", label: "Portal Registry", icon: Globe2 },
+  { to: "/memory-vault", label: "Memory Vault", icon: Brain },
   { to: "/queue", label: "Application Queue", icon: Kanban },
   { to: "/essays", label: "Essay Studio", icon: PenLine },
-  { to: "/profile", label: "Profile Vault", icon: User },
-  { to: "/stories", label: "Story Bank", icon: BookOpen },
-  { to: "/profile-graph", label: "Profile Graph", icon: Network },
-  { to: "/portals", label: "Portal Registry", icon: Globe2 },
-  { to: "/gmail", label: "Gmail Scanner", icon: Mail },
-  { to: "/telegram", label: "Telegram Questions", icon: MessageCircle },
-  { to: "/documents", label: "Document Vault", icon: FolderOpen },
+  { to: "/telegram", label: "Telegram", icon: MessageCircle },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -59,7 +53,7 @@ export function Layout() {
           ))}
         </nav>
         <p className="text-[10px] text-hive-muted px-2 mt-4">
-          Human approval required for all submissions
+          Legacy routes (/profile, /stories, /documents) still work — use Memory Vault
         </p>
       </aside>
       <main className="flex-1 p-8 overflow-auto">

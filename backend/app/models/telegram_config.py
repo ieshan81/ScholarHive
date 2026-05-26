@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, DateTime
+from sqlalchemy import String, DateTime, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -12,6 +12,8 @@ class TelegramUserConfig(Base):
     last_test_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_test_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     last_test_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    last_error_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )

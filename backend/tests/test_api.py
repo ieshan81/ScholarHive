@@ -117,3 +117,37 @@ def test_mark_suspects():
     client.post("/api/scholarships", json={"name": "500 Scholarships in USA", "source_type": "web", "status": "found"})
     r = client.post("/api/scholarships/mark-suspects-review")
     assert r.status_code == 200
+
+
+def test_telegram_diagnostics():
+    r = client.get("/api/telegram/diagnostics")
+    assert r.status_code == 200
+    assert "telegram_configured" in r.json()
+
+
+def test_telegram_send_test_no_chat():
+    r = client.post("/api/telegram/send-test", json={})
+    assert r.status_code == 200
+    data = r.json()
+    assert "success" in data
+    assert data.get("success") is False or data.get("success") is True
+
+
+def test_portal_domain_blocks_mail_google():
+    from app.services.portal_domain import quick_canonical_domain, is_blocked_domain
+    assert is_blocked_domain("mail.google.com")
+    assert quick_canonical_domain("https://mail.google.com/mail/u/0/") is None
+
+
+def test_memory_vault_paste():
+    r = client.post(
+        "/api/memory-vault/paste",
+        json={"text": "I am an international mechanical engineering student at State University with GPA 3.8. " * 3, "title": "Test", "source_type": "essay"},
+    )
+    assert r.status_code == 200
+
+
+def test_memory_vault_overview():
+    r = client.get("/api/memory-vault/overview")
+    assert r.status_code == 200
+    assert "clusters" in r.json()

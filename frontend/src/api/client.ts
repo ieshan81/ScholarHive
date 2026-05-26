@@ -70,11 +70,37 @@ export const api = {
     authUrl: () => request<{ auth_url?: string; message?: string }>("/api/gmail/auth-url"),
     scan: (days = 30) => request<Record<string, unknown>>(`/api/gmail/scan?days=${days}`, { method: "POST" }),
     listMessages: () => request<unknown[]>("/api/gmail/messages"),
+    getMessage: (id: number) => request<Record<string, unknown>>(`/api/gmail/messages/${id}`),
     rejectMessage: (id: number) => request(`/api/gmail/messages/${id}/reject`, { method: "POST" }),
+  },
+  memoryVault: {
+    overview: () => request<Record<string, unknown>>("/api/memory-vault/overview"),
+    paste: (text: string, title: string, source_type: string) =>
+      request("/api/memory-vault/paste", {
+        method: "POST",
+        body: JSON.stringify({ text, title, source_type }),
+      }),
+    upload: async (file: File, source_type: string) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("source_type", source_type);
+      const res = await fetch(`${API_BASE}/api/memory-vault/upload`, { method: "POST", body: fd });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || err.message || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
+    conflicts: () => request<unknown[]>("/api/memory-vault/conflicts"),
+    confirm: (id: number) => request(`/api/memory-vault/nodes/${id}/confirm`, { method: "POST" }),
+    reject: (id: number) => request(`/api/memory-vault/nodes/${id}/reject`, { method: "POST" }),
+    bulkApprove: () => request("/api/memory-vault/bulk-approve-high-confidence", { method: "POST" }),
+    syncLegacy: () => request("/api/memory-vault/sync-legacy", { method: "POST" }),
   },
   telegram: {
     status: () => request<Record<string, unknown>>("/api/telegram/status"),
     getConfig: () => request<Record<string, unknown>>("/api/telegram/config"),
+    diagnostics: () => request<Record<string, unknown>>("/api/telegram/diagnostics"),
     saveConfig: (chat_id: string) =>
       request("/api/telegram/config", { method: "PUT", body: JSON.stringify({ chat_id }) }),
     sendTest: (chat_id?: string) =>
@@ -89,7 +115,8 @@ export const api = {
       }),
   },
   portals: {
-    list: () => request<unknown[]>("/api/portals"),
+    list: (showTracking = false) =>
+      request<unknown[]>(`/api/portals${showTracking ? "?show_tracking=true" : ""}`),
     agentStatus: () => request<Record<string, unknown>>("/api/portals/agent-status"),
     openSession: (id: number) => request(`/api/portals/${id}/open-session`, { method: "POST" }),
   },

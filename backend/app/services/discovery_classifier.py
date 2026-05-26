@@ -30,12 +30,8 @@ SPAM_MARKERS = ["win money", "guaranteed scholarship", "click here to claim", "y
 
 
 def extract_domain(url: str | None) -> str | None:
-    if not url:
-        return None
-    try:
-        return urlparse(url if "://" in url else f"https://{url}").netloc.lower().replace("www.", "")
-    except Exception:
-        return None
+    from app.services.portal_domain import quick_canonical_domain
+    return quick_canonical_domain(url)
 
 
 def classify_candidate(title: str, snippet: str = "", source_type: str = "web", sender: str = "") -> tuple[str, float, str]:

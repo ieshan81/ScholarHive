@@ -28,19 +28,26 @@ from app.services.discovery_helpers import (
 
 
 def get_or_create_portal(db: Session, url: str | None, name: str | None = None) -> Portal | None:
-    domain = extract_domain(url)
-    if not domain:
+    from app.services.portal_domain import quick_canonical_domain, is_blocked_domain
+
+    domain = quick_canonical_domain(url)
+    if not domain or is_blocked_domain(domain):
         return None
     portal = db.query(Portal).filter(Portal.domain == domain).first()
     if not portal:
         portal = Portal(
             domain=domain,
+            canonical_domain=domain,
+            domain_status="active",
             portal_name=name or domain,
             portal_url=url,
             source_count=0,
         )
         db.add(portal)
         db.flush()
+    elif portal.domain_status in ("tracking", "blocked"):
+        portal.domain_status = "active"
+        portal.canonical_domain = domain
     portal.source_count = (portal.source_count or 0) + 1
     return portal
 
