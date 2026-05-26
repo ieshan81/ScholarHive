@@ -6,9 +6,10 @@ cmds = [
   "python3 -m venv --copies /opt/venv",
   "/opt/venv/bin/pip install --upgrade pip",
   "cd backend && /opt/venv/bin/pip install -r requirements.txt",
+  "mkdir -p /opt/scholarhive-libs && (find /nix/store -name 'libstdc++.so.6' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (find /nix/store -name 'libgcc_s.so.1' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true)",
   "cd backend && PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers /opt/venv/bin/python -m playwright install chromium",
   "cd frontend && npm ci && npm run build"
 ]
 
 [start]
-cmd = "cd backend && /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+cmd = "export LD_LIBRARY_PATH=/opt/scholarhive-libs:$LD_LIBRARY_PATH && cd backend && /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT"
