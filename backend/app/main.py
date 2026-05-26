@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from app.config import get_settings
 from app.database import engine, Base, SessionLocal
+import app.models  # noqa: F401 — register ORM tables before create_all
 from app.seed import seed_database
 from app.db_migrate import run_migrations
 from app.routers import (

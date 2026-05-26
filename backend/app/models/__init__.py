@@ -11,11 +11,12 @@ from app.models.portal import Portal, PortalAccount, PortalSession, PortalCheckp
 from app.models.gmail_message import GmailMessage
 from app.models.telegram_config import TelegramUserConfig
 from app.models.profile_graph import ProfileGraphNode
+from app.models.trusted_platform import TrustedPlatform, BlockedSource
 
 __all__ = [
     "Profile", "Story", "Scholarship", "Essay", "MissingInfoRequest", "Document",
     "GmailToken", "WebSearchRun", "DiscoveryRun", "DiscoveryCandidate",
     "Portal", "PortalAccount", "PortalSession", "PortalCheckpoint", "PortalRun",
     "PortalOpportunity", "ApplicationFormDraft", "GmailMessage", "TelegramUserConfig",
-    "ProfileGraphNode",
+    "ProfileGraphNode", "TrustedPlatform", "BlockedSource",
 ]
