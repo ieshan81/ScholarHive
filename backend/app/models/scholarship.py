@@ -47,6 +47,8 @@ class Scholarship(Base):
     why_saved: Mapped[str | None] = mapped_column(Text, nullable=True)
     reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     portal_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    trusted_platform_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    visibility_status: Mapped[str] = mapped_column(String(50), default="active")
     discovery_candidate_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

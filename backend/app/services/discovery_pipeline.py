@@ -28,26 +28,41 @@ from app.services.discovery_helpers import (
 
 
 def get_or_create_portal(db: Session, url: str | None, name: str | None = None) -> Portal | None:
-    from app.services.portal_domain import quick_canonical_domain, is_blocked_domain
+    from app.services.portal_domain import quick_canonical_domain
+    from app.services.trusted_platforms import get_platform_for_url, should_create_portal
+
+    ok, _reason = should_create_portal(url, db)
+    if not ok:
+        domain = quick_canonical_domain(url)
+        if domain:
+            portal = db.query(Portal).filter(Portal.domain == domain).first()
+            if portal and portal.domain_status == "active":
+                portal.domain_status = "ignored"
+        return None
 
     domain = quick_canonical_domain(url)
-    if not domain or is_blocked_domain(domain):
+    if not domain:
         return None
+    platform = get_platform_for_url(url, db)
     portal = db.query(Portal).filter(Portal.domain == domain).first()
     if not portal:
         portal = Portal(
             domain=domain,
             canonical_domain=domain,
             domain_status="active",
-            portal_name=name or domain,
+            portal_name=(platform or {}).get("name") or name or domain,
             portal_url=url,
+            platform_key=(platform or {}).get("platform_key"),
             source_count=0,
         )
         db.add(portal)
         db.flush()
-    elif portal.domain_status in ("tracking", "blocked"):
-        portal.domain_status = "active"
+    else:
+        if portal.domain_status in ("tracking", "ignored", "irrelevant"):
+            portal.domain_status = "active" if ok else portal.domain_status
         portal.canonical_domain = domain
+        if platform:
+            portal.platform_key = platform["platform_key"]
     portal.source_count = (portal.source_count or 0) + 1
     return portal
 
@@ -105,6 +120,12 @@ def save_scholarship_from_dict(
         return "rejected", None
 
     source = raw.get("source_url") or raw.get("application_url")
+    from app.services.trusted_platforms import get_platform_for_url, should_create_scholarship
+
+    ok, _block = should_create_scholarship(source, db)
+    if not ok:
+        return "rejected", None
+
     norm = normalize_url(source)
     dedupe = make_dedupe_key(name, source)
     trust, low_reason, skip = trust_heuristics(raw, source)
@@ -132,6 +153,7 @@ def save_scholarship_from_dict(
 
     domain = extract_domain(source)
     portal = get_or_create_portal(db, source)
+    platform = get_platform_for_url(source, db)
 
     sch = Scholarship(
         name=name,
@@ -165,6 +187,8 @@ def save_scholarship_from_dict(
         classification=cls,
         why_saved=why_saved,
         portal_domain=domain,
+        trusted_platform_key=(platform or {}).get("platform_key"),
+        visibility_status="active",
         discovery_candidate_id=candidate_id,
         is_demo=False,
     )

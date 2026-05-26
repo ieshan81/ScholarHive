@@ -14,14 +14,13 @@ import {
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/trusted-platforms", label: "Trusted Platforms", icon: Globe2 },
   { to: "/radar", label: "Scholarship Radar", icon: Radar },
-  { to: "/web-search", label: "Web Search", icon: Globe },
-  { to: "/gmail", label: "Gmail Scanner", icon: Mail },
-  { to: "/portals", label: "Portal Registry", icon: Globe2 },
   { to: "/memory-vault", label: "Memory Vault", icon: Brain },
   { to: "/queue", label: "Application Queue", icon: Kanban },
   { to: "/essays", label: "Essay Studio", icon: PenLine },
   { to: "/telegram", label: "Telegram", icon: MessageCircle },
+  { to: "/web-search", label: "Web Search", icon: Globe },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -53,7 +52,7 @@ export function Layout() {
           ))}
         </nav>
         <p className="text-[10px] text-hive-muted px-2 mt-4">
-          Legacy routes (/profile, /stories, /documents) still work — use Memory Vault
+          Gmail (paused) and legacy routes remain under Settings and direct URLs
         </p>
       </aside>
       <main className="flex-1 p-8 overflow-auto">

@@ -30,11 +30,44 @@ router = APIRouter(prefix="/api/portals", tags=["portals"])
 
 
 @router.get("")
-async def list_portals(show_tracking: bool = Query(False), db: Session = Depends(get_db)):
+async def list_portals(
+    show_tracking: bool = Query(False),
+    show_all: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    from app.config import get_settings
+    from app.services.trusted_platforms import is_trusted_domain
+
     cleanup_portal_domains(db)
     agent = await portal_agent_status()
     q = db.query(Portal).order_by(Portal.source_count.desc())
-    if not show_tracking:
+    if show_all:
+        pass
+    elif show_tracking:
+        q = q.filter(Portal.domain_status.in_(("tracking", "ignored", "irrelevant", "blocked")))
+    elif get_settings().trusted_only_mode:
+        rows = q.all()
+        trusted_rows = [p for p in rows if is_trusted_domain(p.canonical_domain or p.domain, db)]
+        return [
+            {
+                "id": p.id,
+                "domain": p.domain,
+                "canonical_domain": p.canonical_domain or p.domain,
+                "domain_status": p.domain_status,
+                "platform_key": getattr(p, "platform_key", None),
+                "portal_name": p.portal_name,
+                "portal_url": p.portal_url,
+                "source_count": p.source_count,
+                "login_required": p.login_required,
+                "session_status": p.session_status,
+                "last_scanned_at": p.last_scanned_at.isoformat() if p.last_scanned_at else None,
+                "opportunities_discovered": p.opportunities_discovered,
+                "checkpoints_pending": p.checkpoints_pending,
+                "playwright_available": agent.get("chromium_available"),
+            }
+            for p in trusted_rows
+        ]
+    else:
         q = q.filter(Portal.domain_status == "active")
     portals = q.all()
     return [

@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     upload_storage_path: str = "/data/uploads"
     max_upload_mb: int = 20
     enable_demo_data: bool = False
+    trusted_only_mode: bool = True
 
     @property
     def is_production(self) -> bool:

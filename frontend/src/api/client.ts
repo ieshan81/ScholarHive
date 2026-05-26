@@ -114,9 +114,18 @@ export const api = {
         body: JSON.stringify({ request_id, chat_id }),
       }),
   },
+  trustedPlatforms: {
+    status: () => request<Record<string, unknown>>("/api/trusted-platforms/status"),
+    list: () => request<unknown[]>("/api/trusted-platforms"),
+    ignoredSources: () => request<unknown[]>("/api/trusted-platforms/ignored-sources"),
+    applyCleanup: () =>
+      request<Record<string, unknown>>("/api/trusted-platforms/apply-cleanup", { method: "POST" }),
+  },
   portals: {
-    list: (showTracking = false) =>
-      request<unknown[]>(`/api/portals${showTracking ? "?show_tracking=true" : ""}`),
+    list: (showTracking = false, showAll = false) =>
+      request<unknown[]>(
+        `/api/portals${showAll ? "?show_all=true" : showTracking ? "?show_tracking=true" : ""}`
+      ),
     agentStatus: () => request<Record<string, unknown>>("/api/portals/agent-status"),
     startBrowser: (id: number) =>
       request<Record<string, unknown>>(`/api/portals/${id}/start-browser-session`, { method: "POST" }),

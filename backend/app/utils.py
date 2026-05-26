@@ -14,6 +14,7 @@ def exclude_demo(query: Query, model) -> Query:
 def filter_radar_scholarships(query: Query, include_leads: bool = False, review_only: bool = False) -> Query:
     """Hide rejected/duplicate/source-page junk from default Radar."""
     from app.models.scholarship import Scholarship
+    from app.config import get_settings
 
     if review_only:
         return query.filter(
@@ -22,4 +23,6 @@ def filter_radar_scholarships(query: Query, include_leads: bool = False, review_
     q = query.filter(Scholarship.status.notin_(("rejected", "duplicate")))
     if not include_leads:
         q = q.filter(Scholarship.status != "source_page_only")
+    if get_settings().trusted_only_mode and hasattr(Scholarship, "visibility_status"):
+        q = q.filter(Scholarship.visibility_status == "active")
     return q

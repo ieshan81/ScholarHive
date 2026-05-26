@@ -30,6 +30,7 @@ export default function App() {
         <Route path="/gmail" element={<Gmail />} />
         <Route path="/telegram" element={<Telegram />} />
         <Route path="/documents" element={<Documents />} />
+        <Route path="/trusted-platforms" element={<Portals />} />
         <Route path="/portals" element={<Portals />} />
         <Route path="/profile-graph" element={<ProfileGraph />} />
         <Route path="/settings" element={<SettingsPage />} />

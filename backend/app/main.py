@@ -29,6 +29,7 @@ from app.routers import (
     portals,
     profile_graph,
     memory_vault,
+    trusted_platforms,
 )
 from app.services.portal_cleanup import cleanup_portal_domains
 from app.routers import settings as settings_router
@@ -48,6 +49,9 @@ async def lifespan(app: FastAPI):
     try:
         seed_database(db)
         cleanup_portal_domains(db)
+        from app.services.trusted_platform_cleanup import apply_trusted_platform_cleanup
+
+        apply_trusted_platform_cleanup(db)
     finally:
         db.close()
     yield
@@ -90,6 +94,7 @@ app.include_router(discovery.router)
 app.include_router(portals.router)
 app.include_router(profile_graph.router)
 app.include_router(memory_vault.router)
+app.include_router(trusted_platforms.router)
 
 
 def _register_frontend() -> None:

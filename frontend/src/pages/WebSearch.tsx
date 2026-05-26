@@ -35,10 +35,17 @@ export default function WebSearch() {
 
   return (
     <div>
-      <h2 className="text-2xl font-display text-hive-gold mb-2">Web Scholarship Search</h2>
-      <p className="text-sm text-hive-muted mb-6">
-        Powered by Tavily — manual run only. Results are structured with Gemini when configured.
+      <h2 className="text-2xl font-display text-hive-gold mb-2">Trusted Platform Search</h2>
+      <p className="text-sm text-hive-muted mb-2">
+        {status?.trusted_platform_search
+          ? "Trusted-only search active — Scholarship America, Kaleidoscope, Fastweb."
+          : "Powered by Tavily — manual run only."}
       </p>
+      {!!status?.trusted_platform_search && (
+        <p className="text-xs text-hive-muted mb-6">
+          Advanced broad web search is disabled by default. Non-trusted results go to review only.
+        </p>
+      )}
 
       {!configured && (
         <ConfigBanner message="Web Search not configured — add TAVILY_API_KEY in Railway." />
@@ -50,7 +57,7 @@ export default function WebSearch() {
         </p>
         <input
           className="input-field"
-          placeholder="Custom search query (optional)"
+          placeholder="Optional: site:fastweb.com mechanical engineering scholarship"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />

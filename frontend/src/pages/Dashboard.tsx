@@ -6,13 +6,15 @@ import { ConfigBanner } from "../components/ConfigBanner";
 export default function Dashboard() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [health, setHealth] = useState<Record<string, unknown> | null>(null);
+  const [trusted, setTrusted] = useState<Record<string, unknown> | null>(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    Promise.all([api.dashboard(), api.health()])
-      .then(([d, h]) => {
+    Promise.all([api.dashboard(), api.health(), api.trustedPlatforms.status()])
+      .then(([d, h, t]) => {
         setData(d);
         setHealth(h);
+        setTrusted(t);
       })
       .catch((e) => setErr(e.message));
   }, []);
@@ -42,6 +44,15 @@ export default function Dashboard() {
     <div>
       <h2 className="text-2xl font-display text-hive-gold mb-1">Mission Control</h2>
       <p className="text-hive-muted text-sm mb-6">Your private scholarship command center</p>
+
+      {trusted?.trusted_only_mode && (
+        <div className="card mb-6 border-hive-gold/30 bg-hive-gold/5">
+          <p className="text-sm text-hive-gold font-medium">
+            Trusted Platform Mode active: Scholarship America, Kaleidoscope, Fastweb.
+          </p>
+          <p className="text-xs text-hive-muted mt-1">{String(trusted.message)}</p>
+        </div>
+      )}
 
       {health && !health.gemini_configured && (
         <ConfigBanner message="Gemini not configured — essay AI drafts disabled until GEMINI_API_KEY is set." />

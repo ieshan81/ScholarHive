@@ -22,6 +22,7 @@ from app.services.discovery_helpers import (
     structure_fallback,
 )
 from app.services.curated_sources import CURATED_SOURCE_HINTS
+from app.services.trusted_platforms import trusted_only_enabled, trusted_search_queries
 
 TAVILY_URL = "https://api.tavily.com/search"
 
@@ -37,6 +38,8 @@ DEFAULT_QUERIES = [
 ]
 
 def build_queries_for_profile(profile: Profile | None, user_query: str | None) -> list[str]:
+    if trusted_only_enabled():
+        return trusted_search_queries(profile, user_query)
     if user_query and user_query.strip():
         return [user_query.strip()]
     queries = list(DEFAULT_QUERIES)
@@ -232,11 +235,20 @@ def web_search_status(db: Session) -> dict:
     last = db.query(DiscoveryRun).filter(DiscoveryRun.source_type == "web").order_by(
         DiscoveryRun.started_at.desc()
     ).first()
+    trusted = trusted_only_enabled()
     return {
         "configured": settings.tavily_configured,
         "gemini_recommended": settings.gemini_configured,
+        "trusted_only_mode": trusted,
+        "trusted_platform_search": trusted,
+        "platforms_included": ["Scholarship America", "Kaleidoscope", "Fastweb"] if trusted else [],
+        "broad_search_available": not trusted,
         "status": "configured" if settings.tavily_configured else "not_configured",
-        "message": "Tavily ready" if settings.tavily_configured else "Add TAVILY_API_KEY for web scholarship search",
+        "message": (
+            "Trusted-only platform search active (Scholarship America, Kaleidoscope, Fastweb)."
+            if trusted
+            else ("Tavily ready" if settings.tavily_configured else "Add TAVILY_API_KEY for web scholarship search")
+        ),
         "last_run": {
             "id": last.id,
             "search_query": last.query_or_label,

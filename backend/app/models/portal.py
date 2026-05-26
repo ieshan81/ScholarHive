@@ -11,6 +11,7 @@ class Portal(Base):
     domain: Mapped[str] = mapped_column(String(255), unique=True)
     canonical_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
     domain_status: Mapped[str] = mapped_column(String(50), default="active")
+    platform_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
     portal_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
     portal_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     source_count: Mapped[int] = mapped_column(Integer, default=0)

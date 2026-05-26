@@ -46,7 +46,13 @@ export default function GmailPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-display text-hive-gold mb-6">Gmail Scanner</h2>
+      <h2 className="text-2xl font-display text-hive-gold mb-2">Gmail (Advanced)</h2>
+      {!!status?.discovery_paused && (
+        <p className="text-sm text-amber-200/90 mb-4 p-3 rounded bg-amber-900/20 border border-amber-700/30">
+          Gmail discovery is paused because trusted platform mode is active. Emails will not
+          auto-create scholarships or portals. You can still view messages.
+        </p>
+      )}
       {!configured && (
         <ConfigBanner message="Gmail not configured — add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Railway." />
       )}
@@ -56,10 +62,18 @@ export default function GmailPage() {
           Full message classification before saving. Irrelevant emails are rejected, not saved as scholarships.
         </p>
         <div className="flex gap-2 mt-4">
-          <button className="btn-primary" disabled={!connected} onClick={() => scan(7)}>
+          <button
+            className="btn-primary"
+            disabled={!connected || !!status?.discovery_paused}
+            onClick={() => scan(7)}
+          >
             Scan last 7 days
           </button>
-          <button className="btn-secondary" disabled={!connected} onClick={() => scan(30)}>
+          <button
+            className="btn-secondary"
+            disabled={!connected || !!status?.discovery_paused}
+            onClick={() => scan(30)}
+          >
             Scan last 30 days
           </button>
         </div>

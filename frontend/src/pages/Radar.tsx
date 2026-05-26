@@ -65,7 +65,13 @@ export default function Radar() {
     <div>
       <div className="flex flex-wrap justify-between items-center gap-2 mb-6">
         <h2 className="text-2xl font-display text-hive-gold">Scholarship Radar</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            className="btn-secondary text-sm"
+            onClick={() => api.trustedPlatforms.applyCleanup().then((r) => alert(JSON.stringify(r)))}
+          >
+            Apply Trusted Platform Cleanup
+          </button>
           <button
             className="btn-secondary text-sm"
             onClick={() => api.scholarships.markSuspects().then((r) => alert(r.message))}
@@ -73,7 +79,7 @@ export default function Radar() {
             Review bad imports
           </button>
           <Link to="/web-search" className="btn-secondary text-sm">
-            Run Web Search
+            Trusted Platform Search
           </Link>
         </div>
       </div>

@@ -25,6 +25,12 @@ SCHOLARSHIP_COLUMNS = {
 PORTAL_COLUMNS = {
     "canonical_domain": "VARCHAR(255)",
     "domain_status": "VARCHAR(50) DEFAULT 'active'",
+    "platform_key": "VARCHAR(80)",
+}
+
+SCHOLARSHIP_VISIBILITY_COLUMNS = {
+    "visibility_status": "VARCHAR(50) DEFAULT 'active'",
+    "trusted_platform_key": "VARCHAR(80)",
 }
 
 TELEGRAM_COLUMNS = {
@@ -96,6 +102,7 @@ def _add_columns(table: str, columns: dict) -> None:
 def run_migrations() -> None:
     _add_columns("scholarships", SCHOLARSHIP_COLUMNS)
     _add_columns("portals", PORTAL_COLUMNS)
+    _add_columns("scholarships", SCHOLARSHIP_VISIBILITY_COLUMNS)
     _add_columns("telegram_user_config", TELEGRAM_COLUMNS)
     _add_columns("documents", DOCUMENT_COLUMNS)
     _add_columns("profile_graph_nodes", PROFILE_GRAPH_COLUMNS)

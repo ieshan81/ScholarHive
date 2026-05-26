@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { Loading } from "../components/Loading";
 
@@ -45,6 +46,16 @@ export default function SettingsPage() {
             <p className="text-xs text-hive-muted mt-1">{String(c.message)}</p>
           </div>
         ))}
+      </div>
+      <div className="card mt-6">
+        <h3 className="font-semibold">Advanced</h3>
+        <p className="text-sm text-hive-muted mt-2">
+          Gmail discovery is paused while trusted platform mode is active. You can still view
+          messages or manually review trusted links.
+        </p>
+        <Link to="/gmail" className="btn-secondary text-sm inline-block mt-3">
+          Open Gmail inbox (paused discovery)
+        </Link>
       </div>
       {health && (
         <div className="card mt-6">

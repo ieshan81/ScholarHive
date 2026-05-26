@@ -89,6 +89,22 @@ def fetch_message_detail(service, msg_id: str) -> dict:
 
 async def scan_gmail_v2(db: Session, days: int = 30, max_messages: int = 25) -> dict:
     settings = get_settings()
+    from app.services.trusted_platforms import trusted_only_enabled
+
+    if trusted_only_enabled():
+        return {
+            "configured": settings.gmail_configured,
+            "connected": bool(settings.gmail_configured),
+            "paused": True,
+            "message": (
+                "Gmail discovery is paused because trusted platform mode is active. "
+                "Emails will not auto-create scholarships or portals."
+            ),
+            "scanned": 0,
+            "saved": 0,
+            "rejected_count": 0,
+        }
+
     if not settings.gmail_configured:
         return {"configured": False, "message": "Gmail not configured"}
 

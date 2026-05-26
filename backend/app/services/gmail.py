@@ -31,11 +31,20 @@ def gmail_status(db: Session) -> dict:
         }
     token = db.query(GmailToken).filter(GmailToken.id == 1).first()
     if token and token.access_token:
+        from app.services.trusted_platforms import trusted_only_enabled
+
+        msg = f"Connected as {token.email_address or 'Gmail account'}"
+        if trusted_only_enabled():
+            msg = (
+                "Gmail discovery is paused because trusted platform mode is active. "
+                "Emails will not auto-create scholarships or portals."
+            )
         return {
             "configured": True,
             "connected": True,
             "status": "connected",
-            "message": f"Connected as {token.email_address or 'Gmail account'}",
+            "discovery_paused": trusted_only_enabled(),
+            "message": msg,
             "email": token.email_address,
         }
     return {
