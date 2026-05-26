@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.profile import Profile
@@ -13,7 +14,9 @@ from app.schemas.scholarship import (
 )
 from app.services.eligibility import evaluate_eligibility, apply_eligibility_to_scholarship
 from app.services.apply_prep import prepare_application
-from app.utils import exclude_demo
+from app.utils import exclude_demo, filter_radar_scholarships
+from app.services.discovery_classifier import classify_candidate
+import re
 
 router = APIRouter(prefix="/api/scholarships", tags=["scholarships"])
 
@@ -33,9 +36,15 @@ FILTERS = {
 @router.get("", response_model=list[ScholarshipResponse])
 def list_scholarships(
     filter: str | None = Query(None, alias="filter"),
+    include_leads: bool = Query(False),
+    review_only: bool = Query(False),
     db: Session = Depends(get_db),
 ):
-    q = exclude_demo(db.query(Scholarship), Scholarship).order_by(Scholarship.priority_score.desc())
+    q = filter_radar_scholarships(
+        exclude_demo(db.query(Scholarship), Scholarship),
+        include_leads=include_leads,
+        review_only=review_only,
+    ).order_by(Scholarship.priority_score.desc())
     items = q.all()
     if not filter:
         return items
@@ -120,3 +129,41 @@ def move_status(scholarship_id: int, data: ScholarshipMoveStatus, db: Session = 
 @router.get("/{scholarship_id}/apply-prep")
 def apply_preparation(scholarship_id: int, db: Session = Depends(get_db)):
     return prepare_application(db, scholarship_id)
+
+
+class RejectBody(BaseModel):
+    reason: str = "Manually rejected"
+    status: str = "rejected"
+
+
+@router.post("/{scholarship_id}/reject")
+def reject_scholarship(scholarship_id: int, body: RejectBody, db: Session = Depends(get_db)):
+    sch = db.query(Scholarship).filter(Scholarship.id == scholarship_id).first()
+    if not sch:
+        raise HTTPException(404, "Scholarship not found")
+    sch.status = body.status
+    sch.reject_reason = body.reason
+    db.commit()
+    return {"message": "Rejected", "id": sch.id}
+
+
+@router.post("/mark-suspects-review")
+def mark_suspects_review(db: Session = Depends(get_db)):
+    """Flag likely bad imports (listicles, Gmail junk) for user review — does not delete."""
+    items = exclude_demo(db.query(Scholarship), Scholarship).all()
+    marked = 0
+    for sch in items:
+        cls, _, reason = classify_candidate(sch.name, sch.eligibility_notes or "")
+        if cls in ("scholarship_database_page", "irrelevant", "loan", "spam") or "[Gmail]" in (sch.name or ""):
+            if sch.status not in ("rejected", "submitted", "won"):
+                sch.status = "needs_review"
+                sch.reject_reason = reason or "Suspect import — review required"
+                sch.classification = cls
+                marked += 1
+        elif re.search(r"\b\d{2,4}\+?\s+scholarships\b", sch.name or "", re.I):
+            sch.status = "needs_review"
+            sch.reject_reason = "List/database style title"
+            sch.classification = "scholarship_database_page"
+            marked += 1
+    db.commit()
+    return {"message": f"Marked {marked} records for review", "marked": marked}

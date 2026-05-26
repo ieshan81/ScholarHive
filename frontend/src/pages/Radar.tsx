@@ -63,11 +63,19 @@ export default function Radar() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-2 mb-6">
         <h2 className="text-2xl font-display text-hive-gold">Scholarship Radar</h2>
-        <Link to="/web-search" className="btn-secondary text-sm">
-          Run Web Search
-        </Link>
+        <div className="flex gap-2">
+          <button
+            className="btn-secondary text-sm"
+            onClick={() => api.scholarships.markSuspects().then((r) => alert(r.message))}
+          >
+            Review bad imports
+          </button>
+          <Link to="/web-search" className="btn-secondary text-sm">
+            Run Web Search
+          </Link>
+        </div>
       </div>
       <div className="flex flex-wrap gap-2 mb-6">
         {FILTERS.map((f) => (

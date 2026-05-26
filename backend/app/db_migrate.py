@@ -16,6 +16,11 @@ SCHOLARSHIP_COLUMNS = {
     "dedupe_key": "VARCHAR(600)",
     "gpa_requirement": "VARCHAR(100)",
     "user_edited": "BOOLEAN DEFAULT FALSE",
+    "classification": "VARCHAR(80)",
+    "why_saved": "TEXT",
+    "reject_reason": "TEXT",
+    "portal_domain": "VARCHAR(255)",
+    "discovery_candidate_id": "INTEGER",
 }
 
 

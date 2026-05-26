@@ -11,6 +11,8 @@ import Telegram from "./pages/Telegram";
 import Documents from "./pages/Documents";
 import SettingsPage from "./pages/Settings";
 import WebSearch from "./pages/WebSearch";
+import Portals from "./pages/Portals";
+import ProfileGraph from "./pages/ProfileGraph";
 
 export default function App() {
   return (
@@ -26,6 +28,8 @@ export default function App() {
         <Route path="/gmail" element={<Gmail />} />
         <Route path="/telegram" element={<Telegram />} />
         <Route path="/documents" element={<Documents />} />
+        <Route path="/portals" element={<Portals />} />
+        <Route path="/profile-graph" element={<ProfileGraph />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>

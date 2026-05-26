@@ -97,3 +97,23 @@ def test_web_search_not_configured():
 def test_health_tavily_field():
     r = client.get("/health")
     assert "tavily_configured" in r.json()
+
+
+def test_discovery_classifier_listicle():
+    from app.services.discovery_classifier import classify_candidate
+    cls, conf, _ = classify_candidate("293 Mechanical Engineering Scholarships available in the USA", "")
+    assert cls == "scholarship_database_page"
+    assert conf > 0.8
+
+
+def test_telegram_config_save():
+    r = client.put("/api/telegram/config", json={"chat_id": "12345"})
+    assert r.status_code == 200
+    r2 = client.get("/api/telegram/config")
+    assert r2.json().get("chat_id") == "12345"
+
+
+def test_mark_suspects():
+    client.post("/api/scholarships", json={"name": "500 Scholarships in USA", "source_type": "web", "status": "found"})
+    r = client.post("/api/scholarships/mark-suspects-review")
+    assert r.status_code == 200

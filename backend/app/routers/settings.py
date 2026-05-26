@@ -5,6 +5,9 @@ from app.database import get_db, check_database_connection
 from app.services import gmail as gmail_service
 from app.services import telegram as telegram_service
 from app.services.web_search import web_search_status
+from app.services.portal_agent import portal_agent_status
+from app.services import telegram_config as tg_config
+from app.models.discovery import DiscoveryRun
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -15,6 +18,11 @@ def settings_status(db: Session = Depends(get_db)):
     gmail = gmail_service.gmail_status(db)
     telegram = telegram_service.telegram_status()
     web = web_search_status(db)
+    tg_cfg = tg_config.get_config(db)
+    last_gmail = db.query(DiscoveryRun).filter(DiscoveryRun.source_type == "gmail").order_by(
+        DiscoveryRun.started_at.desc()
+    ).first()
+    agent = portal_agent_status()
     db_ok = check_database_connection()
     storage = settings.storage_writable
 
@@ -46,7 +54,15 @@ def settings_status(db: Session = Depends(get_db)):
             "configured": telegram.get("configured", False),
             "status": telegram.get("status", "not_configured"),
             "message": telegram.get("message"),
+            "chat_id_saved": bool(tg_cfg.chat_id),
+            "last_test_status": tg_cfg.last_test_status,
         },
+        "portal_agent": agent,
+        "last_gmail_scan": {
+            "status": last_gmail.status if last_gmail else None,
+            "saved": last_gmail.opportunities_saved if last_gmail else 0,
+            "rejected": last_gmail.rejected_count if last_gmail else 0,
+        } if last_gmail else None,
         "storage": {
             "configured": True,
             "status": "writable" if storage else "metadata_only",

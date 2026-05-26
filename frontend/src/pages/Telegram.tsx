@@ -10,21 +10,31 @@ type Req = {
   reason?: string;
   status: string;
   user_reply?: string;
-  is_demo?: boolean;
 };
 
 export default function TelegramPage() {
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
-  const [requests, setRequests] = useState<Req[]>([]);
+  const [config, setConfig] = useState<{ chat_id?: string; chat_id_saved?: boolean; last_test_status?: string; last_test_message?: string }>({});
   const [chatId, setChatId] = useState("");
+  const [requests, setRequests] = useState<Req[]>([]);
+  const [testResult, setTestResult] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const load = () => {
+    Promise.all([api.telegram.status(), api.telegram.getConfig(), api.missingInfo.list()]).then(
+      ([s, c, r]) => {
+        setStatus(s);
+        const cfg = c as typeof config;
+        setConfig(cfg);
+        setChatId(cfg.chat_id || "");
+        setRequests(r as Req[]);
+      }
+    );
+  };
+
   useEffect(() => {
-    Promise.all([api.telegram.status(), api.missingInfo.list()]).then(([s, r]) => {
-      setStatus(s);
-      setRequests(r as Req[]);
-      setLoading(false);
-    });
+    load();
+    setLoading(false);
   }, []);
 
   if (loading) return <Loading />;
@@ -33,67 +43,51 @@ export default function TelegramPage() {
     <div>
       <h2 className="text-2xl font-display text-hive-gold mb-6">Telegram Questions</h2>
       {!status?.configured && (
-        <ConfigBanner message="Telegram not configured — set TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET" />
+        <ConfigBanner message="Telegram not configured — set TELEGRAM_BOT_TOKEN in Railway." />
       )}
-      <div className="card mb-6 max-w-md">
-        <input
-          className="input-field mb-2"
-          placeholder="Your Telegram chat ID"
-          value={chatId}
-          onChange={(e) => setChatId(e.target.value)}
-        />
+      <div className="card max-w-md mb-6 space-y-3">
+        <label className="text-sm text-hive-muted">Your Telegram chat ID (saved in database)</label>
+        <input className="input-field" value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="e.g. 123456789" />
         <button
-          className="btn-secondary text-sm"
-          onClick={() => chatId && api.telegram.sendTest(chatId)}
+          className="btn-primary"
+          onClick={() =>
+            api.telegram.saveConfig(chatId).then(() => {
+              load();
+              setTestResult("Chat ID saved.");
+            })
+          }
         >
-          Send test message
+          Save chat ID
         </button>
+        <button
+          className="btn-secondary"
+          onClick={() =>
+            api.telegram.sendTest().then((r) => {
+              const res = r as Record<string, unknown>;
+              setTestResult(res.success ? "Test message sent successfully." : String(res.message));
+              load();
+            })
+          }
+        >
+          Send test (uses saved chat ID)
+        </button>
+        {testResult && <p className="text-sm text-emerald-300">{testResult}</p>}
+        {config.last_test_status && (
+          <p className="text-xs text-hive-muted">Last test: {config.last_test_status} — {config.last_test_message}</p>
+        )}
       </div>
       <div className="space-y-4">
         {requests.map((r) => (
           <div key={r.id} className="card">
-            <div className="flex gap-2">
-              <StatusBadge status={r.status} />
-              {r.is_demo && <span className="badge bg-purple-500/20 text-purple-300">demo</span>}
-            </div>
+            <StatusBadge status={r.status} />
             <p className="mt-2 font-medium">{r.question}</p>
-            {r.reason && <p className="text-sm text-hive-muted">{r.reason}</p>}
-            {r.user_reply && (
-              <div className="mt-3 p-3 bg-hive-panel rounded text-sm">
-                <strong>Your reply:</strong> {r.user_reply}
-              </div>
-            )}
-            <div className="flex gap-2 mt-3 flex-wrap">
-              <input
-                className="input-field flex-1 min-w-[200px] text-sm"
-                placeholder="Record answer manually..."
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    api.missingInfo.answer(r.id, (e.target as HTMLInputElement).value).then(() =>
-                      api.missingInfo.list().then(setRequests)
-                    );
-                  }
-                }}
-              />
-              <button
-                className="btn-secondary text-sm"
-                onClick={() => chatId && api.telegram.sendQuestion(r.id, chatId)}
-              >
-                Send via Telegram
-              </button>
-              <button
-                className="btn-secondary text-sm"
-                onClick={() => api.missingInfo.save(r.id).then(() => api.missingInfo.list().then(setRequests))}
-              >
-                Mark saved
-              </button>
-              <button
-                className="btn-secondary text-sm"
-                onClick={() => api.missingInfo.dismiss(r.id).then(() => api.missingInfo.list().then(setRequests))}
-              >
-                Dismiss
-              </button>
-            </div>
+            {r.user_reply && <p className="text-sm mt-2 p-2 bg-hive-panel rounded">{r.user_reply}</p>}
+            <button
+              className="btn-secondary text-sm mt-3"
+              onClick={() => api.telegram.sendQuestion(r.id).then((res) => setTestResult(String((res as Record<string, unknown>).message)))}
+            >
+              Send via Telegram
+            </button>
           </div>
         ))}
       </div>

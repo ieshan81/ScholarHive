@@ -21,6 +21,9 @@ from app.routers import (
     dashboard,
     jobs,
     web_search,
+    discovery,
+    portals,
+    profile_graph,
 )
 from app.routers import settings as settings_router
 
@@ -76,6 +79,9 @@ app.include_router(dashboard.router)
 app.include_router(settings_router.router)
 app.include_router(jobs.router)
 app.include_router(web_search.router)
+app.include_router(discovery.router)
+app.include_router(portals.router)
+app.include_router(profile_graph.router)
 
 
 def _register_frontend() -> None:
