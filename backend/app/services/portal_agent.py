@@ -29,7 +29,10 @@ def portal_agent_status() -> dict:
     available = bool(check.get("chromium_available"))
     message = "Playwright Chromium ready for portal scans."
     if not check.get("playwright_available"):
-        message = "Playwright package missing — pip install playwright && playwright install chromium"
+        message = (
+            f"Playwright unavailable: {check.get('last_error')}. "
+            "Ensure Railway build runs playwright install chromium and system libs (libstdc++)."
+        )
     elif not available:
         message = (
             f"Playwright/Chromium not available: {check.get('last_error')}. "

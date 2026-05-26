@@ -130,8 +130,8 @@ def check_playwright_available() -> dict[str, Any]:
         from playwright.sync_api import sync_playwright
 
         _PLAYWRIGHT_MODULE = sync_playwright
-    except ImportError as exc:
-        _LAST_ERROR = f"playwright package not installed: {exc}"
+    except Exception as exc:
+        _LAST_ERROR = f"playwright import failed: {exc}"
         _CHROMIUM_OK = False
         return {"playwright_available": False, "chromium_available": False, "last_error": _LAST_ERROR}
 

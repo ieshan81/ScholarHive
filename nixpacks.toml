@@ -1,5 +1,33 @@
 [phases.setup]
-nixPkgs = ["python311Full", "nodejs_20", "gcc", "chromium", "nss", "nspr", "atk", "cups", "dbus", "gtk3", "pango", "cairo", "alsa-lib", "libdrm", "mesa", "expat"]
+nixPkgs = [
+  "python311Full",
+  "nodejs_20",
+  "gcc",
+  "stdenv.cc.cc.lib",
+  "chromium",
+  "nss",
+  "nspr",
+  "atk",
+  "cups",
+  "dbus",
+  "gtk3",
+  "pango",
+  "cairo",
+  "alsa-lib",
+  "libdrm",
+  "mesa",
+  "expat",
+  "glib",
+  "libxcb",
+  "libX11",
+  "libXcomposite",
+  "libXdamage",
+  "libXext",
+  "libXfixes",
+  "libXrandr",
+  "fontconfig",
+  "freetype",
+]
 
 [phases.install]
 cmds = [
@@ -7,6 +35,7 @@ cmds = [
   "/opt/venv/bin/pip install --upgrade pip",
   "cd backend && /opt/venv/bin/pip install -r requirements.txt",
   "cd backend && PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers /opt/venv/bin/python -m playwright install chromium",
+  "cd backend && /opt/venv/bin/python -m playwright install-deps chromium || true",
   "cd frontend && npm ci && npm run build"
 ]
 
