@@ -36,7 +36,7 @@ cmds = [
   "python3 -m venv --copies /opt/venv",
   "/opt/venv/bin/pip install --upgrade pip",
   "cd backend && /opt/venv/bin/pip install -r requirements.txt",
-  \"mkdir -p /opt/scholarhive-libs && (find /nix/store -name 'libstdc++.so.6' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (find /nix/store -name 'libgcc_s.so.1' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (find /nix/store -name 'libglib-2.0.so.0' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (find /nix/store -name 'libdbus-1.so.3' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (find /nix/store -name 'libdrm.so.2' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (ls -la /opt/scholarhive-libs || true)\",
+  "mkdir -p /opt/scholarhive-libs && (find /nix/store -name 'libstdc++.so.6' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (find /nix/store -name 'libgcc_s.so.1' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (find /nix/store -name 'libglib-2.0.so.0' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (find /nix/store -name 'libdbus-1.so.3' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (find /nix/store -name 'libdrm.so.2' 2>/dev/null | head -1 | xargs -I{} cp {} /opt/scholarhive-libs/ || true) && (ls -la /opt/scholarhive-libs || true)",
   "cd backend && PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers /opt/venv/bin/python -m playwright install chromium",
   "cd frontend && npm ci && npm run build"
 ]
