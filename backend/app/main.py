@@ -1,3 +1,7 @@
+from app.runtime_paths import configure_shared_libraries
+
+configure_shared_libraries()
+
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
