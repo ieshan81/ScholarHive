@@ -1,5 +1,35 @@
 [phases.setup]
-nixPkgs = ["python311Full", "nodejs_20", "gcc", "stdenv.cc.cc.lib", "zlib"]
+nixPkgs = [
+  "python311Full",
+  "nodejs_20",
+  "gcc",
+  "stdenv.cc.cc.lib",
+  "zlib",
+  "glib",
+  "nss",
+  "nspr",
+  "dbus",
+  "atk",
+  "at-spi2-atk",
+  "at-spi2-core",
+  "cups",
+  "libdrm",
+  "mesa",
+  "libxkbcommon",
+  "alsa-lib",
+  "pango",
+  "cairo",
+  "xorg.libX11",
+  "xorg.libXcomposite",
+  "xorg.libXdamage",
+  "xorg.libXext",
+  "xorg.libXfixes",
+  "xorg.libXrandr",
+  "xorg.libxcb",
+  "expat",
+  "fontconfig",
+  "freetype",
+]
 
 [phases.install]
 cmds = [
